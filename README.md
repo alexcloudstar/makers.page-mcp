@@ -76,11 +76,20 @@ Bun's automatic `.env` loading is relative to the process's working directory, w
 | `get_draft` | Fetch a single draft by id. |
 | `update_draft` | Edit a draft's text. Resets an approved or rejected draft back to `draft` so it can be re-approved. |
 | `approve_draft` | Mark a draft approved. Required before publishing (unless approvals are disabled). |
-| `reject_draft` | Mark a draft rejected. |
-| `publish_draft` | Publish an approved draft to X via `POST /2/tweets`. Returns the live URL. |
+| `reject_draft` | Mark a draft rejected. Also the way to manually reconcile a draft stuck in `publishing` after a crashed/interrupted publish attempt. |
+| `publish_draft` | Publish an approved draft to X via `POST /2/tweets`. Returns the live URL. If the request fails ambiguously (e.g. a timeout), the draft is left in `publishing` rather than auto-retried, to avoid a duplicate paid post — see below. |
 | `get_x_account` | Check connection status and show the connected `@handle`. |
 
 Typical agent flow: `create_draft` → show the user the draft → user says "approve" → `approve_draft` → `publish_draft`.
+
+### If a publish attempt fails ambiguously
+
+`publish_draft` marks a draft `publishing` before calling the X API, and only clears that if the API gives a
+definitive answer (a real HTTP response, or a clear "not authenticated" error). If the request instead fails
+in a way that could mean X received it anyway — a timeout or network drop — the draft is deliberately left in
+`publishing` and **not** auto-reverted, so an agent can't retry and risk a second, real, paid post. In that
+case: check your X account for the post yourself, then call `reject_draft` (if it didn't go out) or
+`update_draft` (to edit and reset it to `draft`) to reconcile the local record.
 
 ## Configuration
 
@@ -94,7 +103,14 @@ Environment variables:
 | `MAKERS_PAGE_CONFIG_DIR` | `~/.config/makers-page-mcp` | Where credentials are stored. |
 | `MAKERS_PAGE_DATA_DIR` | `~/.local/share/makers-page-mcp` | Where drafts are stored. |
 | `MAKERS_PAGE_REQUIRE_APPROVAL` | `true` | Set to `false` to let agents publish drafts without a separate approval step. |
-| `MAKERS_PAGE_MAX_POST_LENGTH` | `280` | Max characters per post; raise this if you're on X Premium. |
+| `MAKERS_PAGE_MAX_POST_LENGTH` | `280` | Max characters per post (X's weighted count — URLs count as 23, emoji count once); raise this if you're on X Premium. |
+
+## Development
+
+```bash
+bun test        # run the unit test suite
+bun run typecheck
+```
 
 ## Scope of v1
 

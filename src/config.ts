@@ -29,6 +29,26 @@ export type Config = {
   }
 }
 
+export const DEFAULT_MAX_POST_LENGTH = 280
+
+// Exported for testing; not part of the public module surface otherwise.
+export const resolveMaxPostLength = (): number => {
+  const raw = process.env.MAKERS_PAGE_MAX_POST_LENGTH
+  if (raw === undefined) return DEFAULT_MAX_POST_LENGTH
+
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn(
+      `Ignoring invalid MAKERS_PAGE_MAX_POST_LENGTH="${raw}" (must be a positive number); ` +
+        `falling back to the default of ${DEFAULT_MAX_POST_LENGTH}.`,
+    )
+    return DEFAULT_MAX_POST_LENGTH
+  }
+  // Floor rather than reject non-integers (e.g. "280.5") — harmless to accept,
+  // but a character count should be a whole number.
+  return Math.floor(parsed)
+}
+
 export const loadConfig = (): Config => {
   const configDir = resolveConfigDir()
   const dataDir = resolveDataDir()
@@ -39,7 +59,7 @@ export const loadConfig = (): Config => {
     draftsDir: path.join(dataDir, "drafts"),
     credentialsPath: path.join(configDir, "credentials.json"),
     requireApproval: process.env.MAKERS_PAGE_REQUIRE_APPROVAL !== "false",
-    maxPostLength: Number(process.env.MAKERS_PAGE_MAX_POST_LENGTH ?? 280),
+    maxPostLength: resolveMaxPostLength(),
     x: {
       clientId: process.env.X_CLIENT_ID,
       clientSecret: process.env.X_CLIENT_SECRET,
