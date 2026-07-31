@@ -2,6 +2,7 @@
   "name": "makers-page-mcp",
   "version": "0.1.0",
   "description": "Marketing Assistant MCP — draft, approve, and publish posts to X from your coding agent.",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "makers-page-mcp": "dist/index.js",

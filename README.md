@@ -1,5 +1,7 @@
 # Marketing Assistant MCP
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A local [Model Context Protocol](https://modelcontextprotocol.io) server that lets your coding agent (Cursor, Claude Code, etc.) draft, get human approval for, and publish posts to **X** using the X API v2. Nothing ships until you approve it.
 
 v1 supports **X only**. Every post is a `draft` until you call `approve_draft`, and `publish_draft` refuses to post anything that hasn't been approved.
@@ -117,3 +119,15 @@ bun run typecheck
 - Text-only posts to X (no media, threads, or polls).
 - No other channels yet (LinkedIn, Reddit, etc. are planned but not implemented).
 - Local-only: drafts and credentials live on your machine, not in the cloud.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and PR guidelines.
+
+## Security
+
+Found a vulnerability? Please don't open a public issue — see [SECURITY.md](SECURITY.md) for how to report it privately.
+
+## License
+
+[MIT](LICENSE) — see the [changelog](CHANGELOG.md) for release notes.
