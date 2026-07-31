@@ -102,8 +102,12 @@ export class DraftStore {
   async updateText(id: string, text: string): Promise<Draft> {
     const draft = await this.get(id)
     // Editing text is meant to send a draft back through approval, whether
-    // it was previously approved or rejected. Only "published" is terminal.
-    const resetsToDraft = draft.status === "approved" || draft.status === "rejected"
+    // it was previously approved or rejected. "publishing" is included so a
+    // draft stuck there after a crashed/interrupted publish attempt (see
+    // beginPublishing below) can be manually reconciled and re-approved
+    // instead of being permanently stuck. Only "published" is terminal.
+    const resetsToDraft =
+      draft.status === "approved" || draft.status === "rejected" || draft.status === "publishing"
     const updated: Draft = {
       ...draft,
       text,
@@ -126,7 +130,10 @@ export class DraftStore {
 
   async reject(id: string): Promise<Draft> {
     const draft = await this.get(id)
-    if (draft.status === "published" || draft.status === "publishing") {
+    // "publishing" is allowed through here too: it's the manual-reconciliation
+    // path for a draft stuck mid-publish after a crash (see beginPublishing),
+    // once the caller has verified whether the post actually went out.
+    if (draft.status === "published") {
       throw new InvalidDraftTransitionError(id, draft.status, "rejected")
     }
     const updated: Draft = { ...draft, status: "rejected", updatedAt: new Date().toISOString() }

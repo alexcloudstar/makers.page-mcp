@@ -42,7 +42,10 @@ export const registerApprovalTools = (server: McpServer, config: Config): void =
     "reject_draft",
     {
       title: "Reject draft post",
-      description: "Mark a draft as rejected. Rejected drafts cannot be published.",
+      description:
+        "Mark a draft as rejected. Rejected drafts cannot be published. Also usable to reconcile a draft " +
+        "stuck in \"publishing\" (e.g. after a crashed publish_draft call) once you've manually verified " +
+        "whether the post actually went out on X.",
       inputSchema: { id: z.string().meta({ description: "Draft id." }) },
     },
     async ({ id }) =>

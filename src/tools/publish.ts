@@ -4,6 +4,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import type { Config } from "../config.js"
 import { DraftStore, DraftNotFoundError, withDraftLock } from "../drafts/store.js"
 import { XApiError, XClient, NotAuthenticatedError } from "../channels/x/client.js"
+import { NetworkError } from "../util/fetch-with-timeout.js"
 
 const textResult = (text: string): CallToolResult => ({
   content: [{ type: "text", text }],
@@ -14,9 +15,16 @@ const errorResult = (text: string): CallToolResult => ({
   isError: true,
 })
 
-export const registerPublishTools = (server: McpServer, config: Config): void => {
-  const store = new DraftStore(config)
-  const xClient = new XClient(config)
+// Narrowed to just what this module needs, so tests can inject lightweight
+// fakes instead of real X/network clients or a real DraftStore.
+type PublishDeps = {
+  store?: Pick<DraftStore, "get" | "beginPublishing" | "revertPublishing" | "markPublished">
+  xClient?: Pick<XClient, "createTweet">
+}
+
+export const registerPublishTools = (server: McpServer, config: Config, deps: PublishDeps = {}): void => {
+  const store = deps.store ?? new DraftStore(config)
+  const xClient = deps.xClient ?? new XClient(config)
 
   server.registerTool(
     "publish_draft",
@@ -67,13 +75,49 @@ export const registerPublishTools = (server: McpServer, config: Config): void =>
         try {
           tweet = await xClient.createTweet(draft.text)
         } catch (error) {
-          // Nothing was posted, safe to revert so the draft can be retried.
-          await store.revertPublishing(id, statusBeforePublish)
-          if (error instanceof NotAuthenticatedError) return errorResult(error.message)
+          // NotAuthenticatedError means we never had a token to send the
+          // request with, and XApiError means X sent back a definitive HTTP
+          // response (even an error one) — in both cases we know for certain
+          // nothing was posted, so it's safe to revert and allow a retry.
+          if (error instanceof NotAuthenticatedError) {
+            await store.revertPublishing(id, statusBeforePublish)
+            return errorResult(error.message)
+          }
           if (error instanceof XApiError) {
+            await store.revertPublishing(id, statusBeforePublish)
             return errorResult(`X API error (${error.status}): ${error.message}`)
           }
-          throw error
+
+          if (error instanceof NetworkError) {
+            // A failure inside the actual fetch (timeout, DNS, connection
+            // reset, ...) is genuinely ambiguous: X may have received and
+            // processed the request before the connection dropped.
+            // Reverting here would let an agent retry and risk a real, paid
+            // duplicate post. Leave the draft in "publishing" and require
+            // manual reconciliation (reject_draft or update_draft) after the
+            // user has checked their X account.
+            console.error(
+              `publish_draft "${id}": network error talking to X, outcome unknown, leaving draft in "publishing":`,
+              error,
+            )
+            return errorResult(
+              `Publishing draft "${id}" failed with a network error, so it may or may not have posted: ${error.message}\n\n` +
+                "Check your X account before doing anything else. The draft has been left with status " +
+                '"publishing" and will NOT be retried automatically. Once you know the outcome, reconcile it ' +
+                "manually: if it did NOT post, call reject_draft or update_draft to reset it; if it DID post, " +
+                "leave it as-is and note the live URL yourself.",
+            )
+          }
+
+          // Anything else is an unexpected local failure (a bug, a bad
+          // reference, etc.) that happened outside the actual network call,
+          // so it's not ambiguous: the request was never sent. Safe to
+          // revert and allow a retry, but log it since it likely indicates a
+          // real defect rather than a transient condition.
+          console.error(`publish_draft "${id}": unexpected error before any request reached X, reverting:`, error)
+          await store.revertPublishing(id, statusBeforePublish)
+          const message = error instanceof Error ? error.message : String(error)
+          return errorResult(`Publishing draft "${id}" failed unexpectedly before reaching X: ${message}`)
         }
 
         try {
