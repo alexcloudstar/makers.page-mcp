@@ -1,0 +1,103 @@
+# Marketing Assistant MCP
+
+A local [Model Context Protocol](https://modelcontextprotocol.io) server that lets your coding agent (Cursor, Claude Code, etc.) draft, get human approval for, and publish posts to **X** using the X API v2. Nothing ships until you approve it.
+
+v1 supports **X only**. Every post is a `draft` until you call `approve_draft`, and `publish_draft` refuses to post anything that hasn't been approved.
+
+## Cost per post
+
+As of 2026, X's API is pay-per-use for self-serve developer accounts: creating a post costs **$0.015** (plain text) or **$0.20** (if the post contains a URL), charged against credits you prepay in the [X developer console](https://developer.x.com). There's no free write tier anymore. Every `publish_draft` call is a real charge — treat it accordingly (approve deliberately, don't script bulk test-publishing).
+
+## 1. Create an X developer app
+
+1. Go to the [X developer portal](https://developer.x.com) and create (or open) a project + app.
+2. Under **User authentication settings**, enable **OAuth 2.0**.
+3. Set **App permissions** to **Read and write**.
+4. Set the **Type of App** to **Web App, Automated App or Bot** (this gives you a Client ID, and a Client Secret if confidential).
+5. Add an exact-match **Callback URI / Redirect URL**: `http://127.0.0.1:8879/callback`
+   (or your own value — just set `X_REDIRECT_URI` to match in step 3 below).
+6. Copy the **Client ID** (and **Client Secret**, if shown).
+
+## 2. Install and build
+
+```bash
+cd mcp
+bun install
+bun run build
+```
+
+## 3. Set credentials and authorize
+
+Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+```bash
+X_CLIENT_ID=your-client-id
+X_CLIENT_SECRET=your-client-secret   # omit if your app is a public client
+X_REDIRECT_URI=http://127.0.0.1:8879/callback  # must match the portal exactly
+```
+
+Bun loads `.env` automatically for anything run with `bun` (`bun run auth`, `bun run dev`, `bun dist/index.js`) — no extra setup or packages needed. `.env` is gitignored, so your keys never get committed.
+
+Run the one-time authorization flow:
+
+```bash
+bun run auth
+```
+
+This prints an authorize URL — open it, log in as the X account you want to post from, and approve. The server captures the redirect locally and stores an access + refresh token at `~/.config/makers-page-mcp/credentials.json`. Tokens auto-refresh on future use; you shouldn't need to run this again unless you revoke access.
+
+## 4. Connect it to your coding agent
+
+Add to your Cursor `mcp.json` (Settings → MCP, or `~/.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "makers-page": {
+      "command": "bun",
+      "args": ["--env-file=/absolute/path/to/mcp/.env", "/absolute/path/to/mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+Bun's automatic `.env` loading is relative to the process's working directory, which Cursor doesn't guarantee is `mcp/`. The explicit `--env-file` flag above points straight at your `.env` regardless of where the server is launched from, so you don't have to duplicate credentials inside `mcp.json` itself. (Running things yourself from inside `mcp/` — `bun run auth`, `bun run dev`, etc. — picks up `.env` automatically, no flag needed.)
+
+## Tools
+
+| Tool | What it does |
+|------|--------------|
+| `create_draft` | Save a new draft post (`{ channel: "x", text }`). |
+| `list_drafts` | List drafts, optionally filtered by status. |
+| `get_draft` | Fetch a single draft by id. |
+| `update_draft` | Edit a draft's text. Resets an approved or rejected draft back to `draft` so it can be re-approved. |
+| `approve_draft` | Mark a draft approved. Required before publishing (unless approvals are disabled). |
+| `reject_draft` | Mark a draft rejected. |
+| `publish_draft` | Publish an approved draft to X via `POST /2/tweets`. Returns the live URL. |
+| `get_x_account` | Check connection status and show the connected `@handle`. |
+
+Typical agent flow: `create_draft` → show the user the draft → user says "approve" → `approve_draft` → `publish_draft`.
+
+## Configuration
+
+Environment variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `X_CLIENT_ID` | — | Required. X OAuth 2.0 Client ID. |
+| `X_CLIENT_SECRET` | — | Set if your X app is a confidential client. |
+| `X_REDIRECT_URI` | `http://127.0.0.1:8879/callback` | Must match the callback registered in the X developer portal. |
+| `MAKERS_PAGE_CONFIG_DIR` | `~/.config/makers-page-mcp` | Where credentials are stored. |
+| `MAKERS_PAGE_DATA_DIR` | `~/.local/share/makers-page-mcp` | Where drafts are stored. |
+| `MAKERS_PAGE_REQUIRE_APPROVAL` | `true` | Set to `false` to let agents publish drafts without a separate approval step. |
+| `MAKERS_PAGE_MAX_POST_LENGTH` | `280` | Max characters per post; raise this if you're on X Premium. |
+
+## Scope of v1
+
+- Text-only posts to X (no media, threads, or polls).
+- No other channels yet (LinkedIn, Reddit, etc. are planned but not implemented).
+- Local-only: drafts and credentials live on your machine, not in the cloud.

@@ -1,0 +1,32 @@
+{
+  "name": "makers-page-mcp",
+  "version": "0.1.0",
+  "description": "Marketing Assistant MCP — draft, approve, and publish posts to X from your coding agent.",
+  "type": "module",
+  "bin": {
+    "makers-page-mcp": "dist/index.js",
+    "makers-page-mcp-auth": "dist/auth/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "start": "bun dist/index.js",
+    "auth": "bun dist/auth/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "bun": ">=1.1",
+    "node": ">=20"
+  }
+}
