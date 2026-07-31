@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { loadConfig } from "./config.js"
@@ -7,12 +8,17 @@ import { registerApprovalTools } from "./tools/approve.js"
 import { registerPublishTools } from "./tools/publish.js"
 import { registerAccountTools } from "./tools/account.js"
 
+// Read the version from package.json at runtime (via createRequire, since it lives
+// outside rootDir and can't be a static import) so it can't drift from the published version.
+const require = createRequire(import.meta.url)
+const { version } = require("../package.json") as { version: string }
+
 const main = async () => {
   const config = loadConfig()
 
   const server = new McpServer({
     name: "makers-page-mcp",
-    version: "0.1.0",
+    version,
   })
 
   registerDraftTools(server, config)
