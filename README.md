@@ -1,6 +1,7 @@
 # Marketing Assistant MCP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.alexcloudstar%2Fmakers--page--mcp-blue)](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.alexcloudstar/makers-page-mcp)
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) server that lets your coding agent (Cursor, Claude Code, etc.) draft, get human approval for, and publish posts to **X** using the X API v2. Nothing ships until you approve it.
 
