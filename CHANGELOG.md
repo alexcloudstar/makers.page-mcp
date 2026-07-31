@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-31
+
+### Added
+
+- `mcpName` field in `package.json` and a `server.json` manifest so the server can be published to the [official MCP Registry](https://registry.modelcontextprotocol.io).
+
+### Fixed
+
+- The MCP server now reports its actual `package.json` version in the `initialize` handshake instead of a hardcoded, stale version string.
+
 ## [0.1.1] - 2026-07-31
 
 ### Added
@@ -30,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - OAuth 2.0 (PKCE) authorization flow for connecting an X account.
 - Local, file-based draft storage with an approval gate before publishing.
 
-[Unreleased]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/alexcloudstar/makers.page-mcp/releases/tag/v0.1.0

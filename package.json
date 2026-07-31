@@ -1,6 +1,7 @@
 {
   "name": "makers-page-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "mcpName": "io.github.alexcloudstar/makers-page-mcp",
   "description": "Marketing Assistant MCP: draft, approve, and publish posts to X from your coding agent.",
   "keywords": [
     "mcp",
@@ -14,7 +15,7 @@
   ],
   "license": "MIT",
   "author": "alexcloudstar",
-  "homepage": "https://github.com/alexcloudstar/makers.page-mcp#readme",
+  "homepage": "https://makers.page",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/alexcloudstar/makers.page-mcp.git"
