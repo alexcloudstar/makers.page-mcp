@@ -101,6 +101,25 @@ Add to your Cursor `mcp.json` (Settings → MCP, or `~/.cursor/mcp.json`) — th
 
 Bun's automatic `.env` loading is relative to the process's working directory, which most MCP clients don't guarantee is `mcp/`. The explicit `--env-file` flag above points straight at your `.env` regardless of where the server is launched from, so you don't have to duplicate credentials inside `mcp.json` itself.
 
+### Works with any MCP client
+
+This server only uses the standard MCP `stdio` transport — no client-specific extensions, no remote/HTTP requirement. That means the same `command`/`args`/`env` block above works everywhere, just under each client's own config file:
+
+| Client | Config file |
+|---|---|
+| **Cursor** | `~/.cursor/mcp.json` (or Settings → MCP) |
+| **Claude Desktop** | `claude_desktop_config.json` |
+| **Claude Code** | `.mcp.json` (project) or `~/.claude.json` (user) |
+| **OpenAI Codex** (CLI, Desktop, IDE extension) | `~/.codex/config.toml` — or run `codex mcp add makers-page -- npx -y makers-page-mcp` |
+| **Google Gemini CLI** | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project) — or `gemini mcp add` |
+| **GitHub Copilot** (VS Code, Copilot SDK) | `.vscode/mcp.json` or `mcp.json` |
+| **Windsurf** (Cascade) | `~/.codeium/windsurf/mcp_config.json` — same `command`/`args` shape as Cursor |
+| **Cline** (VS Code / JetBrains extension) | its MCP settings panel, or the underlying `cline_mcp_settings.json` |
+| **Zed** | `settings.json` → `context_servers` |
+| **JetBrains AI Assistant** (IntelliJ, PyCharm, WebStorm, ...) | Settings → Tools → AI Assistant → MCP Servers → Add (stdio) |
+
+All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use slightly different top-level keys — `mcpServers` and a UI form, respectively — but the same `command`/`args`/`env` fields underneath). If your tool of choice isn't listed here but supports MCP over stdio, the config above should work unchanged.
+
 ## Tools
 
 | Tool | What it does |
