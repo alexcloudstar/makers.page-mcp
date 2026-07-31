@@ -20,41 +20,73 @@ As of 2026, X's API is pay-per-use for self-serve developer accounts: creating a
    (or your own value — just set `X_REDIRECT_URI` to match in step 3 below).
 6. Copy the **Client ID** (and **Client Secret**, if shown).
 
-## 2. Install and build
+## 2. Install
+
+Pick one:
+
+**Option A — npm (recommended, no clone needed):**
 
 ```bash
-cd mcp
+npx -y makers-page-mcp-auth   # run once to authorize, see step 3
+```
+
+`npx`/`bunx` fetch and cache the package on first run — nothing to build yourself.
+
+**Option B — from source:**
+
+```bash
+git clone https://github.com/alexcloudstar/makers.page-mcp.git
+cd makers.page-mcp/mcp
 bun install
 bun run build
 ```
 
 ## 3. Set credentials and authorize
 
-Copy `.env.example` to `.env` and fill in your values:
+Set these environment variables (from your X developer app, step 1):
 
 ```bash
-cp .env.example .env
+export X_CLIENT_ID=your-client-id
+export X_CLIENT_SECRET=your-client-secret   # omit if your app is a public client
+export X_REDIRECT_URI=http://127.0.0.1:8879/callback  # must match the portal exactly
 ```
 
-```bash
-X_CLIENT_ID=your-client-id
-X_CLIENT_SECRET=your-client-secret   # omit if your app is a public client
-X_REDIRECT_URI=http://127.0.0.1:8879/callback  # must match the portal exactly
-```
-
-Bun loads `.env` automatically for anything run with `bun` (`bun run auth`, `bun run dev`, `bun dist/index.js`) — no extra setup or packages needed. `.env` is gitignored, so your keys never get committed.
+If you're building from source, you can instead copy `.env.example` to `.env` and fill in the same values — Bun loads `.env` automatically for anything run with `bun` (`bun run auth`, `bun run dev`, `bun dist/index.js`). `.env` is gitignored, so your keys never get committed.
 
 Run the one-time authorization flow:
 
 ```bash
-bun run auth
+npx -y makers-page-mcp-auth   # npm install
+bun run auth                  # from source
 ```
 
 This prints an authorize URL — open it, log in as the X account you want to post from, and approve. The server captures the redirect locally and stores an access + refresh token at `~/.config/makers-page-mcp/credentials.json`. Tokens auto-refresh on future use; you shouldn't need to run this again unless you revoke access.
 
 ## 4. Connect it to your coding agent
 
-Add to your Cursor `mcp.json` (Settings → MCP, or `~/.cursor/mcp.json`):
+Add to your Cursor `mcp.json` (Settings → MCP, or `~/.cursor/mcp.json`) — the same shape works for Claude Desktop/Code, Codex, GitHub Copilot, and other MCP clients, just under each tool's own config file:
+
+**If you installed via npm:**
+
+```json
+{
+  "mcpServers": {
+    "makers-page": {
+      "command": "npx",
+      "args": ["-y", "makers-page-mcp"],
+      "env": {
+        "X_CLIENT_ID": "your-client-id",
+        "X_CLIENT_SECRET": "your-client-secret",
+        "X_REDIRECT_URI": "http://127.0.0.1:8879/callback"
+      }
+    }
+  }
+}
+```
+
+(`bunx` works the same way if you'd rather use Bun: `"command": "bunx", "args": ["-y", "makers-page-mcp"]`.)
+
+**If you built from source:**
 
 ```json
 {
@@ -67,7 +99,7 @@ Add to your Cursor `mcp.json` (Settings → MCP, or `~/.cursor/mcp.json`):
 }
 ```
 
-Bun's automatic `.env` loading is relative to the process's working directory, which Cursor doesn't guarantee is `mcp/`. The explicit `--env-file` flag above points straight at your `.env` regardless of where the server is launched from, so you don't have to duplicate credentials inside `mcp.json` itself. (Running things yourself from inside `mcp/` — `bun run auth`, `bun run dev`, etc. — picks up `.env` automatically, no flag needed.)
+Bun's automatic `.env` loading is relative to the process's working directory, which most MCP clients don't guarantee is `mcp/`. The explicit `--env-file` flag above points straight at your `.env` regardless of where the server is launched from, so you don't have to duplicate credentials inside `mcp.json` itself.
 
 ## Tools
 

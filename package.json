@@ -2,7 +2,26 @@
   "name": "makers-page-mcp",
   "version": "0.1.1",
   "description": "Marketing Assistant MCP — draft, approve, and publish posts to X from your coding agent.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "x",
+    "twitter",
+    "social-media",
+    "ai-agent",
+    "cursor",
+    "claude"
+  ],
   "license": "MIT",
+  "author": "alexcloudstar",
+  "homepage": "https://github.com/alexcloudstar/makers.page-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexcloudstar/makers.page-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alexcloudstar/makers.page-mcp/issues"
+  },
   "type": "module",
   "bin": {
     "makers-page-mcp": "dist/index.js",
@@ -17,7 +36,11 @@
     "start": "bun dist/index.js",
     "auth": "bun dist/auth/cli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "test": "bun test"
+    "test": "bun test",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
