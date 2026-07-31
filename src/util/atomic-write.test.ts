@@ -33,7 +33,7 @@ describe("writeFileAtomic", () => {
     // writeFile call fail, exercising the cleanup path.
     const filePath = path.join(dir, "missing-subdir", "draft.json")
     await expect(writeFileAtomic(filePath, "hello")).rejects.toThrow()
-    // Nothing should exist under `dir` at all — no temp file, no target.
+    // Nothing should exist under `dir` at all: no temp file, no target.
     const files = await readdir(dir)
     expect(files).toEqual([])
   })

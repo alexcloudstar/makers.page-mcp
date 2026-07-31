@@ -2,7 +2,7 @@ export type ValidationResult = { ok: true } | { ok: false; error: string }
 
 // X shortens any URL to a fixed-width t.co link regardless of its real
 // length. This is a best-effort match of X's URL matcher (scheme required,
-// no spaces) — good enough for local validation, not a full re-implementation
+// no spaces): good enough for local validation, not a full re-implementation
 // of X's link parser. Known limitation: a URL with no surrounding whitespace
 // (e.g. "seehttps://x.com") will be absorbed into the preceding word.
 const URL_RE = /https?:\/\/\S+/gi

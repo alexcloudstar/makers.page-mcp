@@ -54,7 +54,7 @@ export const registerPublishTools = (server: McpServer, config: Config, deps: Pu
         if (draft.status === "publishing") {
           return errorResult(
             `Draft "${id}" is already being published (or a previous attempt was interrupted). ` +
-              "Check your X account before retrying — if the post went out, use get_draft/update_draft to reconcile the local record manually.",
+              "Check your X account before retrying: if the post went out, use get_draft/update_draft to reconcile the local record manually.",
           )
         }
 
@@ -77,7 +77,7 @@ export const registerPublishTools = (server: McpServer, config: Config, deps: Pu
         } catch (error) {
           // NotAuthenticatedError means we never had a token to send the
           // request with, and XApiError means X sent back a definitive HTTP
-          // response (even an error one) — in both cases we know for certain
+          // response (even an error one), in both cases we know for certain
           // nothing was posted, so it's safe to revert and allow a retry.
           if (error instanceof NotAuthenticatedError) {
             await store.revertPublishing(id, statusBeforePublish)

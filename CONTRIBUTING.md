@@ -10,7 +10,7 @@ cd makers.page-mcp/mcp
 bun install
 ```
 
-You don't need a real X developer account to write or test code — only `bun run auth` and any tool that hits `api.x.com` require one. Everything else runs against local fixtures.
+You don't need a real X developer account to write or test code; only `bun run auth` and any tool that hits `api.x.com` require one. Everything else runs against local fixtures.
 
 ## Development loop
 
@@ -21,7 +21,7 @@ bun run typecheck    # type-check src/ and the test suite, no emit
 bun test             # run the unit test suite
 ```
 
-Run `bun run typecheck` and `bun test` before opening a PR — both run in CI and a PR won't merge if either fails.
+Run `bun run typecheck` and `bun test` before opening a PR: both run in CI and a PR won't merge if either fails.
 
 ## Project layout
 
@@ -38,7 +38,7 @@ Each module has a matching `*.test.ts` file next to it. Add or update tests in t
 
 ## Making a change
 
-1. **Open an issue first for anything nontrivial** — new channels, new tools, or behavior changes to publishing/approval. This project intentionally keeps a tight safety model around real, paid, irreversible posts to X, so it's worth agreeing on the approach before you write code.
+1. **Open an issue first for anything nontrivial**: new channels, new tools, or behavior changes to publishing/approval. This project intentionally keeps a tight safety model around real, paid, irreversible posts to X, so it's worth agreeing on the approach before you write code.
 2. **Keep drafts safe.** Any change touching `src/drafts/` or `src/tools/publish.ts` should preserve two guarantees: nothing publishes without going through `approve_draft` (unless approval is explicitly disabled), and a failed publish attempt never leaves the system in a state where an agent could accidentally post the same content twice. If you're not sure whether your change affects this, ask in the issue or PR.
 3. **Write tests.** `bun test` uses Bun's built-in test runner (`bun:test`). Favor testing real behavior (e.g. a `DraftStore` status transition, a tool's returned result) over internals.
 4. **Match the existing style.** No semicolons, `const` over `function`, early returns, descriptive names. Run `bun run typecheck` to catch obvious issues; there's no separate linter yet.
@@ -59,7 +59,7 @@ Common types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`. Use the impera
 1. Fork the repo and create a branch off `main`.
 2. Make your change, with tests, and confirm `bun run typecheck` and `bun test` both pass.
 3. Open a PR against `main` describing what changed and why. Link the issue it addresses, if any.
-4. Be responsive to review — this is a small project maintained in spare time, so a quick back-and-forth gets things merged faster than a large, unreviewed diff.
+4. Be responsive to review: this is a small project maintained in spare time, so a quick back-and-forth gets things merged faster than a large, unreviewed diff.
 
 ## Reporting bugs
 

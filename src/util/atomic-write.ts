@@ -22,7 +22,7 @@ export const writeFileAtomic = async (
   } catch (error) {
     // Best-effort cleanup so a failed write (e.g. disk full, killed process)
     // doesn't leave a stray temp file behind. ENOENT just means the temp
-    // file was never created (e.g. writeFile itself failed) — expected and
+    // file was never created (e.g. writeFile itself failed): expected and
     // silent. Any other unlink failure (e.g. permissions) is unexpected and
     // worth logging so a stray temp file doesn't go unnoticed.
     await unlink(tmpPath).catch((unlinkError) => {

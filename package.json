@@ -1,7 +1,7 @@
 {
   "name": "makers-page-mcp",
   "version": "0.1.1",
-  "description": "Marketing Assistant MCP — draft, approve, and publish posts to X from your coding agent.",
+  "description": "Marketing Assistant MCP: draft, approve, and publish posts to X from your coding agent.",
   "keywords": [
     "mcp",
     "model-context-protocol",

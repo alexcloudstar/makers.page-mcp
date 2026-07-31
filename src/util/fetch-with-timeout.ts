@@ -2,7 +2,7 @@ const DEFAULT_TIMEOUT_MS = 20_000
 
 /**
  * Thrown for failures that happen while a request is in flight (timeout, DNS
- * failure, connection reset, etc.) — as opposed to failures that happen
+ * failure, connection reset, etc.), as opposed to failures that happen
  * before or after the actual network call. Callers that need to know
  * whether a mutating request (e.g. a POST) might have reached the server
  * despite the error should check for this type specifically: anything else

@@ -8,7 +8,7 @@ v1 supports **X only**. Every post is a `draft` until you call `approve_draft`, 
 
 ## Cost per post
 
-As of 2026, X's API is pay-per-use for self-serve developer accounts: creating a post costs **$0.015** (plain text) or **$0.20** (if the post contains a URL), charged against credits you prepay in the [X developer console](https://developer.x.com). There's no free write tier anymore. Every `publish_draft` call is a real charge — treat it accordingly (approve deliberately, don't script bulk test-publishing).
+As of 2026, X's API is pay-per-use for self-serve developer accounts: creating a post costs **$0.015** (plain text) or **$0.20** (if the post contains a URL), charged against credits you prepay in the [X developer console](https://developer.x.com). There's no free write tier anymore. Every `publish_draft` call is a real charge: treat it accordingly (approve deliberately, don't script bulk test-publishing).
 
 ## 1. Create an X developer app
 
@@ -17,22 +17,22 @@ As of 2026, X's API is pay-per-use for self-serve developer accounts: creating a
 3. Set **App permissions** to **Read and write**.
 4. Set the **Type of App** to **Web App, Automated App or Bot** (this gives you a Client ID, and a Client Secret if confidential).
 5. Add an exact-match **Callback URI / Redirect URL**: `http://127.0.0.1:8879/callback`
-   (or your own value — just set `X_REDIRECT_URI` to match in step 3 below).
+   (or your own value; just set `X_REDIRECT_URI` to match in step 3 below).
 6. Copy the **Client ID** (and **Client Secret**, if shown).
 
 ## 2. Install
 
 Pick one:
 
-**Option A — npm (recommended, no clone needed):**
+**Option A: npm (recommended, no clone needed)**
 
 ```bash
 npx -y makers-page-mcp-auth   # run once to authorize, see step 3
 ```
 
-`npx`/`bunx` fetch and cache the package on first run — nothing to build yourself.
+`npx`/`bunx` fetch and cache the package on first run; nothing to build yourself.
 
-**Option B — from source:**
+**Option B: from source**
 
 ```bash
 git clone https://github.com/alexcloudstar/makers.page-mcp.git
@@ -51,7 +51,7 @@ export X_CLIENT_SECRET=your-client-secret   # omit if your app is a public clien
 export X_REDIRECT_URI=http://127.0.0.1:8879/callback  # must match the portal exactly
 ```
 
-If you're building from source, you can instead copy `.env.example` to `.env` and fill in the same values — Bun loads `.env` automatically for anything run with `bun` (`bun run auth`, `bun run dev`, `bun dist/index.js`). `.env` is gitignored, so your keys never get committed.
+If you're building from source, you can instead copy `.env.example` to `.env` and fill in the same values. Bun loads `.env` automatically for anything run with `bun` (`bun run auth`, `bun run dev`, `bun dist/index.js`). `.env` is gitignored, so your keys never get committed.
 
 Run the one-time authorization flow:
 
@@ -60,11 +60,11 @@ npx -y makers-page-mcp-auth   # npm install
 bun run auth                  # from source
 ```
 
-This prints an authorize URL — open it, log in as the X account you want to post from, and approve. The server captures the redirect locally and stores an access + refresh token at `~/.config/makers-page-mcp/credentials.json`. Tokens auto-refresh on future use; you shouldn't need to run this again unless you revoke access.
+This prints an authorize URL: open it, log in as the X account you want to post from, and approve. The server captures the redirect locally and stores an access + refresh token at `~/.config/makers-page-mcp/credentials.json`. Tokens auto-refresh on future use; you shouldn't need to run this again unless you revoke access.
 
 ## 4. Connect it to your coding agent
 
-Add to your Cursor `mcp.json` (Settings → MCP, or `~/.cursor/mcp.json`) — the same shape works for Claude Desktop/Code, Codex, GitHub Copilot, and other MCP clients, just under each tool's own config file:
+Add to your Cursor `mcp.json` (Settings → MCP, or `~/.cursor/mcp.json`). The same shape works for Claude Desktop/Code, Codex, GitHub Copilot, and other MCP clients, just under each tool's own config file:
 
 **If you installed via npm:**
 
@@ -103,22 +103,22 @@ Bun's automatic `.env` loading is relative to the process's working directory, w
 
 ### Works with any MCP client
 
-This server only uses the standard MCP `stdio` transport — no client-specific extensions, no remote/HTTP requirement. That means the same `command`/`args`/`env` block above works everywhere, just under each client's own config file:
+This server only uses the standard MCP `stdio` transport: no client-specific extensions, no remote/HTTP requirement. That means the same `command`/`args`/`env` block above works everywhere, just under each client's own config file:
 
 | Client | Config file |
 |---|---|
 | **Cursor** | `~/.cursor/mcp.json` (or Settings → MCP) |
 | **Claude Desktop** | `claude_desktop_config.json` |
 | **Claude Code** | `.mcp.json` (project) or `~/.claude.json` (user) |
-| **OpenAI Codex** (CLI, Desktop, IDE extension) | `~/.codex/config.toml` — or run `codex mcp add makers-page -- npx -y makers-page-mcp` |
-| **Google Gemini CLI** | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project) — or `gemini mcp add` |
+| **OpenAI Codex** (CLI, Desktop, IDE extension) | `~/.codex/config.toml`, or run `codex mcp add makers-page -- npx -y makers-page-mcp` |
+| **Google Gemini CLI** | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project), or `gemini mcp add` |
 | **GitHub Copilot** (VS Code, Copilot SDK) | `.vscode/mcp.json` or `mcp.json` |
-| **Windsurf** (Cascade) | `~/.codeium/windsurf/mcp_config.json` — same `command`/`args` shape as Cursor |
+| **Windsurf** (Cascade) | `~/.codeium/windsurf/mcp_config.json`, same `command`/`args` shape as Cursor |
 | **Cline** (VS Code / JetBrains extension) | its MCP settings panel, or the underlying `cline_mcp_settings.json` |
 | **Zed** | `settings.json` → `context_servers` |
 | **JetBrains AI Assistant** (IntelliJ, PyCharm, WebStorm, ...) | Settings → Tools → AI Assistant → MCP Servers → Add (stdio) |
 
-All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use slightly different top-level keys — `mcpServers` and a UI form, respectively — but the same `command`/`args`/`env` fields underneath). If your tool of choice isn't listed here but supports MCP over stdio, the config above should work unchanged.
+All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use slightly different top-level keys, `mcpServers` and a UI form respectively, but the same `command`/`args`/`env` fields underneath). If your tool of choice isn't listed here but supports MCP over stdio, the config above should work unchanged.
 
 ## Tools
 
@@ -130,7 +130,7 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 | `update_draft` | Edit a draft's text. Resets an approved or rejected draft back to `draft` so it can be re-approved. |
 | `approve_draft` | Mark a draft approved. Required before publishing (unless approvals are disabled). |
 | `reject_draft` | Mark a draft rejected. Also the way to manually reconcile a draft stuck in `publishing` after a crashed/interrupted publish attempt. |
-| `publish_draft` | Publish an approved draft to X via `POST /2/tweets`. Returns the live URL. If the request fails ambiguously (e.g. a timeout), the draft is left in `publishing` rather than auto-retried, to avoid a duplicate paid post — see below. |
+| `publish_draft` | Publish an approved draft to X via `POST /2/tweets`. Returns the live URL. If the request fails ambiguously (e.g. a timeout), the draft is left in `publishing` rather than auto-retried, to avoid a duplicate paid post (see below). |
 | `get_x_account` | Check connection status and show the connected `@handle`. |
 
 Typical agent flow: `create_draft` → show the user the draft → user says "approve" → `approve_draft` → `publish_draft`.
@@ -139,7 +139,7 @@ Typical agent flow: `create_draft` → show the user the draft → user says "ap
 
 `publish_draft` marks a draft `publishing` before calling the X API, and only clears that if the API gives a
 definitive answer (a real HTTP response, or a clear "not authenticated" error). If the request instead fails
-in a way that could mean X received it anyway — a timeout or network drop — the draft is deliberately left in
+in a way that could mean X received it anyway (a timeout or network drop), the draft is deliberately left in
 `publishing` and **not** auto-reverted, so an agent can't retry and risk a second, real, paid post. In that
 case: check your X account for the post yourself, then call `reject_draft` (if it didn't go out) or
 `update_draft` (to edit and reset it to `draft`) to reconcile the local record.
@@ -150,13 +150,13 @@ Environment variables:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `X_CLIENT_ID` | — | Required. X OAuth 2.0 Client ID. |
-| `X_CLIENT_SECRET` | — | Set if your X app is a confidential client. |
+| `X_CLIENT_ID` | *(none)* | Required. X OAuth 2.0 Client ID. |
+| `X_CLIENT_SECRET` | *(none)* | Set if your X app is a confidential client. |
 | `X_REDIRECT_URI` | `http://127.0.0.1:8879/callback` | Must match the callback registered in the X developer portal. |
 | `MAKERS_PAGE_CONFIG_DIR` | `~/.config/makers-page-mcp` | Where credentials are stored. |
 | `MAKERS_PAGE_DATA_DIR` | `~/.local/share/makers-page-mcp` | Where drafts are stored. |
 | `MAKERS_PAGE_REQUIRE_APPROVAL` | `true` | Set to `false` to let agents publish drafts without a separate approval step. |
-| `MAKERS_PAGE_MAX_POST_LENGTH` | `280` | Max characters per post (X's weighted count — URLs count as 23, emoji count once); raise this if you're on X Premium. |
+| `MAKERS_PAGE_MAX_POST_LENGTH` | `280` | Max characters per post (X's weighted count: URLs count as 23, emoji count once); raise this if you're on X Premium. |
 
 ## Development
 
@@ -177,8 +177,8 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tes
 
 ## Security
 
-Found a vulnerability? Please don't open a public issue — see [SECURITY.md](SECURITY.md) for how to report it privately.
+Found a vulnerability? Please don't open a public issue: see [SECURITY.md](SECURITY.md) for how to report it privately.
 
 ## License
 
-[MIT](LICENSE) — see the [changelog](CHANGELOG.md) for release notes.
+[MIT](LICENSE). See the [changelog](CHANGELOG.md) for release notes.

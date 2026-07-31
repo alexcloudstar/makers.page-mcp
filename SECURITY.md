@@ -15,7 +15,7 @@ Include as much of this as you can:
 - The affected version/commit
 - Any suggested fix, if you have one
 
-You should get an initial response within 5 business days. This is a small, spare-time-maintained project, so please be patient — but every report will get a reply.
+You should get an initial response within 5 business days. This is a small, spare-time-maintained project, so please be patient, but every report will get a reply.
 
 ## Supported versions
 
@@ -30,7 +30,7 @@ In scope:
 
 Out of scope:
 
-- Vulnerabilities in the X API itself, or in `@modelcontextprotocol/sdk`, `zod`, Bun, or Node.js — report those upstream.
+- Vulnerabilities in the X API itself, or in `@modelcontextprotocol/sdk`, `zod`, Bun, or Node.js. Report those upstream.
 - Issues that require an attacker to already have local filesystem or shell access to the machine running the server (credentials are stored in a config file with `0600` permissions on disk; protecting that machine is your responsibility).
 
 ## Design notes for reviewers

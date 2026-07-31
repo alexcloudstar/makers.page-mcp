@@ -44,7 +44,7 @@ export const resolveMaxPostLength = (): number => {
     )
     return DEFAULT_MAX_POST_LENGTH
   }
-  // Floor rather than reject non-integers (e.g. "280.5") — harmless to accept,
+  // Floor rather than reject non-integers (e.g. "280.5"): harmless to accept,
   // but a character count should be a whole number.
   return Math.floor(parsed)
 }
