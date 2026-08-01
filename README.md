@@ -1,8 +1,10 @@
-# Marketing Assistant MCP
+# Makers Page MCP
 
-**The [Model Context Protocol](https://modelcontextprotocol.io) server that turns "I just shipped this" into a published post on X, without leaving your coding agent.**
+**The indie stack [Model Context Protocol](https://modelcontextprotocol.io) server — one connection for your founder tools, instead of wiring a hundred separate ones.**
 
-`makers-page-mcp` runs locally next to Cursor, Claude Code, Codex, or any other MCP client. Your agent drafts a channel-native post about what you just built, you read it and say "approve," and it goes out through the real X API v2. Nothing publishes without a human in the loop, and every draft, approval, and post lives in a local, auditable file, not a third-party dashboard.
+Indie founders already juggle socials, Stripe, analytics, GitHub, and a database. Each usually means another MCP, another config block, another context the agent doesn't share. Makers Page MCP aggregates those surfaces into one local server your coding agent already understands, so it can draft a launch post with revenue context, check a deploy, or pull product metrics without hopping tools.
+
+`makers-page-mcp` runs locally next to Cursor, Claude Code, Codex, or any other MCP client. **v1 ships X first**: your agent drafts a channel-native post about what you just built, you approve it, and it goes out through the real X API v2. Nothing publishes without a human in the loop. More connectors (payments, analytics, GitHub, DBs, and more) are on the [roadmap](#roadmap).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/makers-page-mcp.svg)](https://www.npmjs.com/package/makers-page-mcp)
@@ -11,7 +13,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 [![Bun](https://img.shields.io/badge/bun-%3E%3D1.1-fbf0df?logo=bun&logoColor=black)](package.json)
 
-Part of [makers.page](https://makers.page), Marketing Assistant for indie startups.
+[makers.page](https://makers.page) — the indie stack MCP that already knows your tools.
 
 ---
 
@@ -43,10 +45,14 @@ Part of [makers.page](https://makers.page), Marketing Assistant for indie startu
 
 ## Why this exists
 
-Coding agents already have an MCP for your docs, your issue tracker, your database. This is the one for telling people what you built, without you having to open X, retype the release note in the right voice, and hit publish yourself.
+Most agents end up with a pile of MCP servers — one for GitHub, one for Stripe, one for analytics, one for socials — each with its own auth and none sharing context. Makers Page MCP is the opposite bet: **one indie stack connection that already knows the tools founders actually use**, so the agent can act across the stack instead of juggling integrations.
 
+Today that means approval-gated publishing to X. Next: the rest of the stack (see [Roadmap](#roadmap)).
+
+- **One MCP, not a hundred.** Aggregate the indie stack (socials, payments, analytics, GitHub, DBs) behind a single local server instead of a config file full of one-off connectors.
+- **Shared context by design.** The agent shouldn't re-learn who you are and what you shipped every time it switches tools.
 - **Agent-native, not another dashboard.** Same protocol, same config file as your other MCP servers. No new app to log into.
-- **Approval-gated by default.** Every post is a `draft` until you explicitly call `approve_draft`. `publish_draft` refuses to post anything that hasn't been approved, unless you turn that off yourself.
+- **Approval-gated by default.** Every post is a `draft` until you explicitly call `approve_draft`. `publish_draft` refuses to post anything that hasn't been approved, unless you turn that off yourself. The same pattern will apply to anything that spends money or posts publicly.
 - **Built for real, paid API calls.** X's write API costs money per post (see below). The draft/approve/publish split exists so an agent can never spam your account or your wallet.
 - **Crash-safe by design.** Publishing uses atomic file writes, keyed locks around concurrent operations on the same draft, and a three-way error split (definitive failure, ambiguous network failure, unexpected error) so a dropped connection can never turn into a silent duplicate post.
 - **Local-first.** Drafts and credentials live on your machine (`~/.local/share/makers-page-mcp`, `~/.config/makers-page-mcp`), not in someone else's cloud.
@@ -54,14 +60,16 @@ Coding agents already have an MCP for your docs, your issue tracker, your databa
 
 ## How it compares
 
-| | Manual posting | Buffer / Hootsuite | Zapier / Make | **Marketing Assistant MCP** |
+| | Manual / browser hopping | Separate MCP per tool | Zapier / Make | **Makers Page MCP** |
 |---|---|---|---|---|
-| Lives inside your coding agent | No | No | No | **Yes** |
-| Writes channel-native copy from what you just shipped | No | No | Only with extra prompting glue | **Yes** |
-| Requires a new app / dashboard login | No | Yes | Yes | **No** |
-| Human approval before anything ships | Depends on you | No (auto-scheduled) | No (auto-triggered) | **Yes, by default** |
-| Open source / self-hostable | *(n/a)* | No | No | **Yes (MIT)** |
-| Where data lives | You | Their servers | Their servers | **Your machine** |
+| Lives inside your coding agent | No | Yes | No | **Yes** |
+| One connection for the indie stack | No | No (N configs) | Partial (N apps) | **Yes (aggregates)** |
+| Shared context across socials, money, code, data | No | No | Only with glue | **Yes (destination)** |
+| Human approval before anything ships or spends | Depends on you | Depends on each server | No (auto-triggered) | **Yes, by default** |
+| Open source / self-hostable | *(n/a)* | Varies | No | **Yes (MIT)** |
+| Where data lives | You | Mixed | Their servers | **Your machine** |
+
+v1 covers X posting today; the aggregator columns describe where this indie stack MCP is headed.
 
 ## Cost per post
 
@@ -219,13 +227,26 @@ Environment variables:
 
 ## Roadmap
 
-v1 ships with **X only**, on purpose: get the approval-gated publish loop right for one channel before adding more surface area for something that costs real money per post.
+Destination: **one local indie stack MCP** that already knows the founder tools — socials, payments, analytics, GitHub, databases — so you don't maintain a hundred separate connections. v1 ships **X only**, on purpose: prove the approval-gated write loop before adding more surfaces that spend money or post publicly.
 
-- **Text-only posts to X** (no media, threads, or polls): done.
-- **More channels**: LinkedIn, Reddit, Threads, Bluesky, and others from the [makers.page](https://makers.page) roadmap, adapting the same draft into channel-native tone and length per platform.
-- **Local-only, always**: drafts and credentials stay on your machine, whichever channels land.
+**Shipped**
 
-Have a channel you want prioritized? [Open an issue](https://github.com/alexcloudstar/makers.page-mcp/issues).
+- Text-only posts to X (no media, threads, or polls), with draft → approve → publish and crash-safe publish semantics.
+
+**Next**
+
+1. **More socials** — LinkedIn, Reddit, Threads, Bluesky; same draft adapted to channel-native tone and length.
+2. **Payments & code** — Stripe (Lemon Squeezy as a secondary path), GitHub.
+3. **Analytics & data** — PostHog / Plausible, Postgres via Supabase / Neon.
+4. **Ops extras** — Resend, Sentry, as the core set stabilizes.
+5. **Launch directories** — research launches and draft listing copy where useful; **submit only where a stable API or first-class MCP write path exists**. Today that is thin: Product Hunt community MCPs are read-only (the PH API has no create-post mutation), Hacker News write MCPs scrape browser login (no public write API), and Peerlist / BetaList / Uneed / Fazier / Microlaunch / Dev Hunt / Tiny Launch have no MCP for submissions. MCP registries (official registry, Smithery, PulseMCP, Glama, mcp.so) are for listing *this* server, not for submitting your product to launch boards.
+
+**Always**
+
+- Local-only drafts and credentials, whichever connectors land.
+- Approval gates for anything that posts publicly or spends money.
+
+Want a connector prioritized? [Open an issue](https://github.com/alexcloudstar/makers.page-mcp/issues).
 
 ## Development
 
@@ -299,5 +320,5 @@ Found a vulnerability? Please don't open a public issue: see [SECURITY.md](SECUR
 ---
 
 <p align="center">
-  Built by <a href="https://github.com/alexcloudstar">@alexcloudstar</a> for <a href="https://makers.page">makers.page</a>, Marketing Assistant for indie startups.
+  Built by <a href="https://github.com/alexcloudstar">@alexcloudstar</a> for <a href="https://makers.page">makers.page</a> — the indie stack MCP.
 </p>

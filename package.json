@@ -2,13 +2,17 @@
   "name": "makers-page-mcp",
   "version": "0.1.2",
   "mcpName": "io.github.alexcloudstar/makers-page-mcp",
-  "description": "Marketing Assistant MCP: draft, approve, and publish posts to X from your coding agent.",
+  "description": "Makers Page MCP: the indie stack MCP — one local server for socials, payments, analytics, GitHub, and DBs. X publish ships first.",
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "makers-page",
+    "indie-stack",
     "x",
     "twitter",
     "social-media",
+    "stripe",
+    "analytics",
     "ai-agent",
     "cursor",
     "claude"
