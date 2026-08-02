@@ -202,8 +202,20 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 | `edit_published_draft` | Edit the **root** post of a published draft (`edit_options.previous_post_id`). Re-attaches media/quote when present. Each edit creates a new post id, which is stored locally. Rejects polls and community posts. |
 | `delete_published_draft` | Delete every stored post id on X whenever live ids are recorded (published, partial `publishing`, or legacy/corrupt records), then mark the local draft `deleted`. |
 | `get_x_account` | Check connection status and show the connected `@handle`. |
+| `lookup_x_user` | Resolve an `@handle` to a user id (and DM eligibility). |
+| `get_dm_rate_limit` | Show local DM send limits and current usage. |
+| `create_dm_draft` | Save a draft DM. Required: `text` plus `recipientId` or `recipientUsername` (or `conversationId`). Optional: one `mediaPaths` entry. |
+| `list_dm_drafts` | List DM drafts, optionally filtered by status (`draft`, `approved`, `rejected`, `sending`, `sent`, `deleted`). |
+| `get_dm_draft` | Fetch a single DM draft by id. |
+| `update_dm_draft` | Edit a DM draft (pass `null` to clear optional fields). Resets approved drafts to `draft`. |
+| `approve_dm_draft` | Mark a DM draft approved. Required before sending (unless approvals are disabled). |
+| `reject_dm_draft` | Mark a DM draft rejected, or reconcile one stuck in `sending`. |
+| `send_dm_draft` | Send an approved DM via the X API. Enforces local rate limits. |
+| `list_dm_events` | Read recent events in a 1:1 DM thread (`participantId` or `username`). |
 
 Typical agent flow: `create_draft` → show the user the draft → user says "approve" → `approve_draft` → `publish_draft`.
+
+Typical DM flow: `lookup_x_user` (optional) → `create_dm_draft` → user approves → `approve_dm_draft` → `send_dm_draft`.
 
 ### X create/update fields
 
@@ -220,6 +232,7 @@ Typical agent flow: `create_draft` → show the user the draft → user says "ap
 ### Caveats (X product limits)
 
 - **Re-auth for media:** OAuth scopes now include `media.write`. If you authorized before this change, run `makers-page-mcp-auth` / `bun run auth` once more.
+- **Re-auth for DMs:** OAuth scopes now include `dm.read` and `dm.write`. Re-run auth after upgrading to send or read DMs.
 - **Quote posts:** OpenAPI documents quote as Enterprise-only on self-serve; expect API errors on lower tiers.
 - **Edit:** Requires **X Premium**, roughly a **30-minute** window and **up to 5 edits** from the original. Each edit returns a **new post id** (we update the local draft). Polls and community posts are not editable.
 - **Replies:** Self-serve apps can create **self-threads** (reply to your own previous part). Replies to *other* accounts are blocked unless summoned.
@@ -251,6 +264,10 @@ Environment variables:
 | `MAKERS_PAGE_DATA_DIR` | `~/.local/share/makers-page-mcp` | Where drafts are stored. |
 | `MAKERS_PAGE_REQUIRE_APPROVAL` | `true` | Set to `false` to let agents publish drafts without a separate approval step. |
 | `MAKERS_PAGE_MAX_POST_LENGTH` | `280` | Max characters per post (X's weighted count: URLs count as 23, emoji count once); raise this if you're on X Premium. |
+| `MAKERS_PAGE_MAX_DM_LENGTH` | `10000` | Max characters per DM. |
+| `MAKERS_PAGE_DM_MAX_PER_HOUR` | `10` | Local cap on DM sends per rolling hour (before calling X). |
+| `MAKERS_PAGE_DM_MAX_PER_DAY` | `50` | Local cap on DM sends per rolling 24 hours. |
+| `MAKERS_PAGE_DM_MIN_INTERVAL_MS` | `3000` | Minimum milliseconds between consecutive DM sends. |
 
 ## Roadmap
 
@@ -259,6 +276,7 @@ Destination: **one local indie stack MCP** that already knows the founder tools 
 **Shipped**
 
 - X manage-posts: text, threads, polls, media (chunked upload), quote, community + `share_with_followers`, paid partnership, edit, and delete — still behind draft → approve → publish with crash-safe / no-auto-retry semantics.
+- X DMs: draft → approve → send with local rate limits (hourly, daily, min interval); read conversation events; `@handle` lookup.
 
 **Next**
 

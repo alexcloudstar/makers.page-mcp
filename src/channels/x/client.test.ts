@@ -15,9 +15,12 @@ const config = {
   configDir: "/tmp/makers-page-mcp-test-config",
   dataDir: "/tmp/makers-page-mcp-test-data",
   draftsDir: "/tmp/makers-page-mcp-test-drafts",
+  dmDraftsDir: "/tmp/makers-page-mcp-test-dm-drafts",
   credentialsPath: "/tmp/makers-page-mcp-test-config/credentials.json",
   requireApproval: true,
   maxPostLength: 280,
+  maxDmLength: 10_000,
+  dmRateLimit: { maxPerHour: 10, maxPerDay: 50, minIntervalMs: 3000 },
   x: {
     clientId: "test",
     clientSecret: undefined,
@@ -115,7 +118,7 @@ describe("XClient.deleteTweet", () => {
 
   test("throws when the API returns deleted: false", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ data: { deleted: false } }), { status: 200 })) as typeof fetch
+      new Response(JSON.stringify({ data: { deleted: false } }), { status: 200 })) as unknown as typeof fetch
 
     const client = withMockedAuth(new XClient(config))
     await expect(client.deleteTweet("42")).rejects.toMatchObject({

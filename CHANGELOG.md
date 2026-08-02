@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- X Direct Messages: draft → approve → send flow with local rate limits (`MAKERS_PAGE_DM_MAX_PER_HOUR`, `MAKERS_PAGE_DM_MAX_PER_DAY`, `MAKERS_PAGE_DM_MIN_INTERVAL_MS`).
+- DM tools: `lookup_x_user`, `get_dm_rate_limit`, `create_dm_draft`, `list_dm_drafts`, `get_dm_draft`, `update_dm_draft`, `approve_dm_draft`, `reject_dm_draft`, `send_dm_draft`, `list_dm_events`.
+- OAuth scopes `dm.read` and `dm.write` (re-run `makers-page-mcp-auth` after upgrading).
 - Full X manage-posts surface beyond text-only: threads (`parts`), polls, media upload (`mediaPaths` + chunked `/2/media/upload`), quote tweets, community posts (`communityId` / `shareWithFollowers`), and paid partnership.
 - Tools: `edit_published_draft` (root post only; persists the new post id X returns) and `delete_published_draft` (deletes all stored ids, then marks the draft `deleted`).
 - OAuth scope `media.write` (re-run `makers-page-mcp-auth` after upgrading if you need media).
@@ -17,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `create_draft` / `update_draft` accept the extended X fields; `poll`, `mediaPaths`, and `quoteTweetId` are mutually exclusive.
 - `publish_draft` uploads media, posts thread replies to the previous part, and on mid-thread failure records posted ids while leaving status `publishing` (no auto-retry).
+- X media upload migrated to current v2 endpoints (simple upload for images; `/initialize` → `/append` → `/finalize` for GIF/video).
 - Partial publishes with recorded live ids cannot be reset via `reject_draft` / `update_draft` (would orphan posts); use `delete_published_draft` instead (allowed whenever live ids are recorded).
 - `edit_published_draft` re-uploads `mediaPaths` and re-sends `quoteTweetId` / `paidPartnership` so edits do not strip attachments or flags.
 - Media validation rejects GIF/video mixes and multiple GIFs/videos; media STATUS polling waits up to 10 minutes.

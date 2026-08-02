@@ -59,6 +59,31 @@ type MediaProcessingInfo = {
 
 type MediaUploadData = { data: { id: string; processing_info?: MediaProcessingInfo } }
 
+export type SentDm = {
+  dmEventId: string
+  dmConversationId: string
+}
+
+export type CreateDmMessageInput = {
+  text: string
+  mediaIds?: string[]
+}
+
+export type DmEventSummary = {
+  id: string
+  text?: string
+  createdAt?: string
+  senderId?: string
+}
+
+const buildDmMessageBody = (input: CreateDmMessageInput): Record<string, unknown> => {
+  const body: Record<string, unknown> = { text: input.text }
+  if (input.mediaIds && input.mediaIds.length > 0) {
+    body.attachments = input.mediaIds.map((mediaId) => ({ media_id: mediaId }))
+  }
+  return body
+}
+
 export class XClient {
   private readonly credentialStore: CredentialStore
 
@@ -348,6 +373,23 @@ export class XClient {
     }
   }
 
+  async getUserByUsername(
+    username: string,
+  ): Promise<XUser & { receivesYourDm?: boolean }> {
+    const handle = username.replace(/^@/, "")
+    const result = await this.request<{
+      data: { id: string; username: string; name: string; receives_your_dm?: boolean }
+    }>(`/2/users/by/username/${encodeURIComponent(handle)}?user.fields=receives_your_dm`, {
+      method: "GET",
+    })
+    return {
+      id: result.data.id,
+      username: result.data.username,
+      name: result.data.name,
+      receivesYourDm: result.data.receives_your_dm,
+    }
+  }
+
   async uploadMedia(filePath: string): Promise<string> {
     const resolved = resolveMediaCategory(filePath)
     if (!resolved.ok) {
@@ -359,5 +401,60 @@ export class XClient {
     }
 
     return this.uploadMediaChunked(filePath, resolved.mimeType, resolved.category)
+  }
+
+  async sendDmByParticipantId(
+    participantId: string,
+    input: CreateDmMessageInput,
+  ): Promise<SentDm> {
+    const result = await this.request<{ data: { dm_event_id: string; dm_conversation_id: string } }>(
+      `/2/dm_conversations/with/${encodeURIComponent(participantId)}/messages`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildDmMessageBody(input)),
+      },
+    )
+    return {
+      dmEventId: result.data.dm_event_id,
+      dmConversationId: result.data.dm_conversation_id,
+    }
+  }
+
+  async sendDmByConversationId(
+    conversationId: string,
+    input: CreateDmMessageInput,
+  ): Promise<SentDm> {
+    const result = await this.request<{ data: { dm_event_id: string; dm_conversation_id: string } }>(
+      `/2/dm_conversations/${encodeURIComponent(conversationId)}/messages`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildDmMessageBody(input)),
+      },
+    )
+    return {
+      dmEventId: result.data.dm_event_id,
+      dmConversationId: result.data.dm_conversation_id,
+    }
+  }
+
+  async listDmEventsByParticipant(
+    participantId: string,
+    maxResults = 20,
+  ): Promise<DmEventSummary[]> {
+    const capped = Math.min(Math.max(maxResults, 1), 100)
+    const result = await this.request<{
+      data?: Array<{ id: string; text?: string; created_at?: string; sender_id?: string }>
+    }>(
+      `/2/dm_conversations/with/${encodeURIComponent(participantId)}/dm_events?max_results=${capped}&dm_event.fields=id,text,created_at,sender_id`,
+      { method: "GET" },
+    )
+    return (result.data ?? []).map((event) => ({
+      id: event.id,
+      text: event.text,
+      createdAt: event.created_at,
+      senderId: event.sender_id,
+    }))
   }
 }
