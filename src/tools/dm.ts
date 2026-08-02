@@ -48,6 +48,44 @@ const formatSendError = (error: unknown): string => {
   return error instanceof Error ? error.message : String(error)
 }
 
+const dmUserNotFoundError = (username: string): string => "X user @" + username + " was not found."
+
+const dmRecipientBlockedError = (username: string): string =>
+  "@" + username + " cannot receive DMs from your account (receives_your_dm=false)."
+
+type DmParticipantLookup = { id: string } | { error: string }
+
+const lookupDmParticipantId = async (
+  xClient: Pick<XClient, "getUserByUsername">,
+  username: string,
+): Promise<DmParticipantLookup> => {
+  try {
+    const user = await xClient.getUserByUsername(username)
+    if (user.receivesYourDm === false) {
+      return { error: dmRecipientBlockedError(user.username) }
+    }
+    return { id: user.id }
+  } catch (error) {
+    if (error instanceof XApiError && error.status === 404) {
+      return { error: dmUserNotFoundError(username) }
+    }
+    throw error
+  }
+}
+
+const resolveUsernameIds = async (
+  xClient: Pick<XClient, "getUserByUsername">,
+  usernames: string[],
+): Promise<{ ids: string[] } | { error: string }> => {
+  const ids: string[] = []
+  for (const username of usernames) {
+    const lookup = await lookupDmParticipantId(xClient, username)
+    if ("error" in lookup) return { error: lookup.error }
+    ids.push(lookup.id)
+  }
+  return { ids }
+}
+
 const resolveRecipientId = async (
   xClient: Pick<XClient, "getUserByUsername">,
   draft: DmDraft,
@@ -57,20 +95,9 @@ const resolveRecipientId = async (
     return { error: "DM draft is missing recipientId and recipientUsername." }
   }
 
-  try {
-    const user = await xClient.getUserByUsername(draft.recipientUsername)
-    if (user.receivesYourDm === false) {
-      return {
-        error: "@" + user.username + " cannot receive DMs from your account (receives_your_dm=false).",
-      }
-    }
-    return { recipientId: user.id }
-  } catch (error) {
-    if (error instanceof XApiError && error.status === 404) {
-      return { error: "X user @" + draft.recipientUsername + " was not found." }
-    }
-    throw error
-  }
+  const lookup = await lookupDmParticipantId(xClient, draft.recipientUsername)
+  if ("error" in lookup) return { error: lookup.error }
+  return { recipientId: lookup.id }
 }
 
 const resolveParticipantIds = async (
@@ -78,29 +105,105 @@ const resolveParticipantIds = async (
   draft: DmDraft,
 ): Promise<{ participantIds?: string[]; error?: string }> => {
   const ids = [...(draft.participantIds ?? [])]
-  if (draft.participantUsernames) {
-    for (const username of draft.participantUsernames) {
-      try {
-        const user = await xClient.getUserByUsername(username)
-        if (user.receivesYourDm === false) {
-          return {
-            error: "@" + user.username + " cannot receive DMs from your account (receives_your_dm=false).",
-          }
-        }
-        ids.push(user.id)
-      } catch (error) {
-        if (error instanceof XApiError && error.status === 404) {
-          return { error: "X user @" + username + " was not found." }
-        }
-        throw error
-      }
-    }
+  const usernames = draft.participantUsernames ?? []
+
+  if (usernames.length > 0) {
+    const resolved = await resolveUsernameIds(xClient, usernames)
+    if ("error" in resolved) return { error: resolved.error }
+    ids.push(...resolved.ids)
   }
+
   const unique = [...new Set(ids)]
   if (unique.length < 2) {
     return { error: "Group DMs need at least 2 unique participant ids after resolving usernames." }
   }
   return { participantIds: unique }
+}
+
+type SentDm = { dmEventId: string; dmConversationId: string }
+
+type DmDeliveryResult =
+  | { ok: true; sent: SentDm; recipientId?: string }
+  | { ok: false; error: string }
+
+const dmDraftSendBlockedReason = (
+  id: string,
+  draft: DmDraft,
+  requireApproval: boolean,
+): string | undefined => {
+  if (draft.status === "sent") {
+    return (
+      'DM draft "' +
+      id +
+      '" was already sent (event ' +
+      draft.dmEventId +
+      ", conversation " +
+      draft.dmConversationId +
+      ")."
+    )
+  }
+  if (draft.status === "deleted") {
+    return 'DM draft "' + id + '" was deleted and cannot be sent.'
+  }
+  if (draft.status === "sending") {
+    return (
+      'DM draft "' +
+      id +
+      '" is already being sent (or a previous attempt was interrupted). Check X manually before retrying.'
+    )
+  }
+  if (draft.status !== "approved" && requireApproval) {
+    return (
+      'DM draft "' +
+      id +
+      '" has status "' +
+      draft.status +
+      '". Approve it with approve_dm_draft before sending.'
+    )
+  }
+  return undefined
+}
+
+const dmDraftUpdateBlockedReason = (id: string, draft: DmDraft): string | undefined => {
+  if (draft.status === "sent") {
+    return 'DM draft "' + id + '" was already sent and cannot be updated.'
+  }
+  if (draft.status === "deleted") {
+    return 'DM draft "' + id + '" was deleted and cannot be updated.'
+  }
+  if (draft.status === "sending") {
+    return 'DM draft "' + id + '" is currently being sent. Wait or reconcile manually.'
+  }
+  return undefined
+}
+
+const deliverDmMessage = async (
+  xClient: Pick<
+    XClient,
+    | "getUserByUsername"
+    | "sendDmByParticipantId"
+    | "sendDmByConversationId"
+    | "createGroupDmConversation"
+  >,
+  draft: DmDraft,
+  messageInput: { text: string; mediaIds?: string[] },
+): Promise<DmDeliveryResult> => {
+  if (draft.conversationId) {
+    const sent = await xClient.sendDmByConversationId(draft.conversationId, messageInput)
+    return { ok: true, sent, recipientId: draft.recipientId }
+  }
+
+  if (isGroupDraftTarget(draft)) {
+    const resolved = await resolveParticipantIds(xClient, draft)
+    if (resolved.error) return { ok: false, error: resolved.error }
+    const sent = await xClient.createGroupDmConversation(resolved.participantIds!, messageInput)
+    return { ok: true, sent, recipientId: draft.recipientId }
+  }
+
+  const resolved = await resolveRecipientId(xClient, draft)
+  if (resolved.error) return { ok: false, error: resolved.error }
+  const sent = await xClient.sendDmByParticipantId(resolved.recipientId!, messageInput)
+  return { ok: true, sent, recipientId: resolved.recipientId }
 }
 
 type DmToolDeps = {
@@ -360,15 +463,8 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           throw error
         }
 
-        if (current.status === "sent") {
-          return errorResult('DM draft "' + id + '" was already sent and cannot be updated.')
-        }
-        if (current.status === "deleted") {
-          return errorResult('DM draft "' + id + '" was deleted and cannot be updated.')
-        }
-        if (current.status === "sending") {
-          return errorResult('DM draft "' + id + '" is currently being sent. Wait or reconcile manually.')
-        }
+        const updateBlockedReason = dmDraftUpdateBlockedReason(id, current)
+        if (updateBlockedReason) return errorResult(updateBlockedReason)
 
         const update = {
           text,
@@ -461,36 +557,8 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           throw error
         }
 
-        if (draft.status === "sent") {
-          return errorResult(
-            'DM draft "' +
-              id +
-              '" was already sent (event ' +
-              draft.dmEventId +
-              ", conversation " +
-              draft.dmConversationId +
-              ").",
-          )
-        }
-        if (draft.status === "deleted") {
-          return errorResult('DM draft "' + id + '" was deleted and cannot be sent.')
-        }
-        if (draft.status === "sending") {
-          return errorResult(
-            'DM draft "' +
-              id +
-              '" is already being sent (or a previous attempt was interrupted). Check X manually before retrying.',
-          )
-        }
-        if (draft.status !== "approved" && config.requireApproval) {
-          return errorResult(
-            'DM draft "' +
-              id +
-              '" has status "' +
-              draft.status +
-              '". Approve it with approve_dm_draft before sending.',
-          )
-        }
+        const sendBlockedReason = dmDraftSendBlockedReason(id, draft, config.requireApproval)
+        if (sendBlockedReason) return errorResult(sendBlockedReason)
 
         if (draft.mediaPaths && draft.mediaPaths.length > 0) {
           const mediaValidation = await validateMediaPaths(draft.mediaPaths)
@@ -517,27 +585,13 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           }
 
           const messageInput = { text: draft.text, mediaIds }
-          let sent
-          let resolvedRecipientId = draft.recipientId
-
-          if (draft.conversationId) {
-            sent = await xClient.sendDmByConversationId(draft.conversationId, messageInput)
-          } else if (isGroupDraftTarget(draft)) {
-            const resolved = await resolveParticipantIds(xClient, draft)
-            if (resolved.error) {
-              await store.revertSending(id, statusBeforeSend)
-              return errorResult(resolved.error)
-            }
-            sent = await xClient.createGroupDmConversation(resolved.participantIds!, messageInput)
-          } else {
-            const resolved = await resolveRecipientId(xClient, draft)
-            if (resolved.error) {
-              await store.revertSending(id, statusBeforeSend)
-              return errorResult(resolved.error)
-            }
-            resolvedRecipientId = resolved.recipientId
-            sent = await xClient.sendDmByParticipantId(resolved.recipientId!, messageInput)
+          const delivery = await deliverDmMessage(xClient, draft, messageInput)
+          if (!delivery.ok) {
+            await store.revertSending(id, statusBeforeSend)
+            return errorResult(delivery.error)
           }
+
+          const { sent, recipientId: resolvedRecipientId } = delivery
 
           try {
             const updated = await store.markSent(id, {
