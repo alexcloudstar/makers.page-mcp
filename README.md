@@ -8,6 +8,7 @@
 [![npm version](https://img.shields.io/npm/v/makers-page-mcp.svg)](https://www.npmjs.com/package/makers-page-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/makers-page-mcp.svg)](https://www.npmjs.com/package/makers-page-mcp)
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.alexcloudstar%2Fmakers--page--mcp-blue)](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.alexcloudstar/makers-page-mcp)
+[![makers.page-mcp MCP server](https://glama.ai/mcp/servers/alexcloudstar/makers.page-mcp/badges/score.svg)](https://glama.ai/mcp/servers/alexcloudstar/makers.page-mcp)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 [![Bun](https://img.shields.io/badge/bun-%3E%3D1.1-fbf0df?logo=bun&logoColor=black)](package.json)
 
