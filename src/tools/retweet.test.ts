@@ -71,6 +71,36 @@ describe("retweet_post", () => {
     expect(updated.status).toBe("completed")
   })
 
+  test("returns success with warning when markCompleted fails after X retweet", async () => {
+    await setup()
+    const baseStore = new RetweetDraftStore(config)
+    const draft = await baseStore.create({ tweetId: "999", action: "retweet" })
+    await baseStore.approve(draft.id)
+
+    const store = Object.assign(Object.create(Object.getPrototypeOf(baseStore)), baseStore, {
+      markCompleted: async () => {
+        throw new Error("disk full")
+      },
+    }) as RetweetDraftStore
+
+    const server = new StubServer()
+    registerRetweetTools(server as unknown as never, config, {
+      store,
+      xClient: {
+        retweet: async () => {},
+        undoRetweet: async () => {},
+      },
+    })
+
+    const result = await server.call("retweet_post", { id: draft.id })
+    expect(result.isError).toBeFalsy()
+    expect(textOf(result)).toContain("WARNING")
+    expect(textOf(result)).toContain("Retweeted")
+
+    const updated = await baseStore.get(draft.id)
+    expect(updated.status).toBe("executing")
+  })
+
   test("refuses unapproved draft when approval required", async () => {
     await setup()
     const store = new RetweetDraftStore(config)

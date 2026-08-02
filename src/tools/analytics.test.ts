@@ -100,4 +100,15 @@ describe("analytics tools", () => {
     expect(parsed.metricSource).toBe("tweet_analytics_api")
     expect(parsed.today.impressions).toBe(1100)
   })
+
+  test("get_x_account_summary rejects invalid timezone", async () => {
+    const server = new StubServer()
+    registerAnalyticsTools(server as unknown as never, config, {
+      xClient: stubXClient(),
+    })
+
+    const result = await server.call("get_x_account_summary", { timezone: "Not/A/Timezone" })
+    expect(result.isError).toBe(true)
+    expect(textOf(result)).toContain("Invalid timezone")
+  })
 })

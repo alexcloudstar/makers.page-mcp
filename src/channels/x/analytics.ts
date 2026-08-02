@@ -126,6 +126,9 @@ const timePartsInTimezone = (date: Date, timezone: string) => {
   return { hour: read("hour") % 24, minute: read("minute") }
 }
 
+const DAY_BOUND_MAX_STEPS = 96
+const DAY_BOUND_STEP_MS = 15 * 60_000
+
 export const getDayBoundsUtc = (
   reference: Date,
   timezone: string,
@@ -133,20 +136,20 @@ export const getDayBoundsUtc = (
   const dateKey = dateKeyInTimezone(reference.toISOString(), timezone)
 
   let start = new Date(reference)
-  for (let i = 0; i < 96; i++) {
-    start = new Date(start.getTime() - 15 * 60_000)
+  for (let i = 0; i < DAY_BOUND_MAX_STEPS; i++) {
+    start = new Date(start.getTime() - DAY_BOUND_STEP_MS)
     const key = dateKeyInTimezone(start.toISOString(), timezone)
     const { hour, minute } = timePartsInTimezone(start, timezone)
     if (key === dateKey && hour === 0 && minute === 0) break
     if (key !== dateKey) {
-      start = new Date(start.getTime() + 15 * 60_000)
+      start = new Date(start.getTime() + DAY_BOUND_STEP_MS)
       break
     }
   }
 
   let end = new Date(reference)
-  for (let i = 0; i < 96; i++) {
-    end = new Date(end.getTime() + 15 * 60_000)
+  for (let i = 0; i < DAY_BOUND_MAX_STEPS; i++) {
+    end = new Date(end.getTime() + DAY_BOUND_STEP_MS)
     const key = dateKeyInTimezone(end.toISOString(), timezone)
     if (key !== dateKey) {
       end = new Date(end.getTime() - 1)
@@ -291,7 +294,7 @@ const hourInTimezone = (iso: string, timezone: string): number =>
       hour: "numeric",
       hour12: false,
     }).format(new Date(iso)),
-  )
+  ) % 24
 
 const hourLabel = (hour: number): string => {
   const normalized = hour === 24 ? 0 : hour

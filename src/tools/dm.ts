@@ -497,13 +497,6 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           if (!mediaValidation.ok) return errorResult(mediaValidation.error)
         }
 
-        try {
-          await rateLimiter.assertCanSend()
-        } catch (error) {
-          if (error instanceof DmRateLimitError) return errorResult(error.message)
-          throw error
-        }
-
         const statusBeforeSend = draft.status
         await store.beginSending(id)
 
@@ -511,6 +504,16 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           let mediaIds: string[] | undefined
           if (draft.mediaPaths && draft.mediaPaths.length > 0) {
             mediaIds = [await xClient.uploadMedia(draft.mediaPaths[0]!)]
+          }
+
+          try {
+            await rateLimiter.reserveSendSlot()
+          } catch (error) {
+            if (error instanceof DmRateLimitError) {
+              await store.revertSending(id, statusBeforeSend)
+              return errorResult(error.message)
+            }
+            throw error
           }
 
           const messageInput = { text: draft.text, mediaIds }
@@ -536,23 +539,45 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
             sent = await xClient.sendDmByParticipantId(resolved.recipientId!, messageInput)
           }
 
-          await rateLimiter.recordSend()
-          const updated = await store.markSent(id, {
-            dmEventId: sent.dmEventId,
-            dmConversationId: sent.dmConversationId,
-            recipientId: resolvedRecipientId,
-          })
+          try {
+            const updated = await store.markSent(id, {
+              dmEventId: sent.dmEventId,
+              dmConversationId: sent.dmConversationId,
+              recipientId: resolvedRecipientId,
+            })
 
-          return textResult(
-            "DM sent.\n" +
-              "event id: " +
-              sent.dmEventId +
-              "\n" +
-              "conversation id: " +
-              sent.dmConversationId +
-              "\n\n" +
-              formatDmDraft(updated),
-          )
+            return textResult(
+              "DM sent.\n" +
+                "event id: " +
+                sent.dmEventId +
+                "\n" +
+                "conversation id: " +
+                sent.dmConversationId +
+                "\n\n" +
+                formatDmDraft(updated),
+            )
+          } catch (error) {
+            console.error(
+              'DM event "' +
+                sent.dmEventId +
+                '" was sent but the local draft record for "' +
+                id +
+                '" could not be updated:',
+              error,
+            )
+            return textResult(
+              "DM sent.\n" +
+                "event id: " +
+                sent.dmEventId +
+                "\n" +
+                "conversation id: " +
+                sent.dmConversationId +
+                "\n\n" +
+                "WARNING: the DM is live, but updating the local draft record failed. " +
+                "Verify manually and do not retry send_dm_draft for this draft. Error: " +
+                (error instanceof Error ? error.message : String(error)),
+            )
+          }
         } catch (error) {
           if (error instanceof NotAuthenticatedError || error instanceof XApiError) {
             await store.revertSending(id, statusBeforeSend)

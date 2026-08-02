@@ -89,4 +89,10 @@ describe("analytics window aggregation", () => {
     const analysis = analyzePostingTimes(posts, 30, "UTC", 2)
     expect(analysis.bestHoursByImpressions[0]?.hour).toBe(15)
   })
+
+  test("analyzePostingTimes normalizes midnight hour 24 into bucket 0", () => {
+    const posts = [post("midnight", "2026-01-01T05:00:00.000Z", 100)]
+    const analysis = analyzePostingTimes(posts, 30, "America/New_York", 1)
+    expect(analysis.byHour.some((bucket) => bucket.hour === 0 && bucket.postCount === 1)).toBe(true)
+  })
 })

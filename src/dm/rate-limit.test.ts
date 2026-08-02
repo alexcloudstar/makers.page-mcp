@@ -42,4 +42,29 @@ describe("DmRateLimiter", () => {
     await limiter.recordSend(now - 2000)
     await expect(limiter.assertCanSend(now)).rejects.toThrow(/hour/)
   })
+
+  test("reserveSendSlot atomically blocks concurrent over-limit sends", async () => {
+    const limiter = new DmRateLimiter(config)
+    const now = Date.now()
+    await limiter.reserveSendSlot(now - 3000)
+
+    await expect(
+      Promise.all([limiter.reserveSendSlot(now), limiter.reserveSendSlot(now)]),
+    ).rejects.toThrow(DmRateLimitError)
+
+    const snapshot = await limiter.snapshot(now)
+    expect(snapshot.sentLastHour).toBeLessThanOrEqual(config.dmRateLimit.maxPerHour)
+  })
+
+  test("blocks when daily limit reached", async () => {
+    const limiter = new DmRateLimiter({
+      ...config,
+      dmRateLimit: { maxPerHour: 10, maxPerDay: 3, minIntervalMs: 0 },
+    })
+    const baseNow = Date.now()
+    await limiter.reserveSendSlot(baseNow - 3 * 3_600_000)
+    await limiter.reserveSendSlot(baseNow - 2 * 3_600_000)
+    await limiter.reserveSendSlot(baseNow - 1 * 3_600_000)
+    await expect(limiter.reserveSendSlot(baseNow)).rejects.toThrow(/day/)
+  })
 })

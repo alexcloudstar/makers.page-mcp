@@ -92,11 +92,23 @@ const executeRetweetDraft = async (
         await xClient.undoRetweet(draft.tweetId)
       }
 
-      const updated = await store.markCompleted(id)
       const verb = expectedAction === "retweet" ? "Retweeted" : "Undo retweet completed for"
-      return textResult(
-        `${verb} ${draft.tweetUrl ?? draft.tweetId}.\n\n${formatRetweetDraft(updated)}`,
-      )
+      const target = draft.tweetUrl ?? draft.tweetId
+      try {
+        const updated = await store.markCompleted(id)
+        return textResult(`${verb} ${target}.\n\n${formatRetweetDraft(updated)}`)
+      } catch (error) {
+        console.error(
+          `${toolName} "${id}": action succeeded on X but local draft record could not be updated:`,
+          error,
+        )
+        return textResult(
+          `${verb} ${target}.\n\n` +
+            "WARNING: the action succeeded on X, but updating the local draft record failed. " +
+            "Verify manually and do not retry for this draft. Error: " +
+            (error instanceof Error ? error.message : String(error)),
+        )
+      }
     } catch (error) {
       if (error instanceof NotAuthenticatedError || error instanceof XApiError) {
         await store.revertExecuting(id, statusBeforeExecute)
@@ -163,7 +175,7 @@ export const registerRetweetTools = (
     async ({ status }) => {
       const drafts = await store.list(status)
       if (drafts.length === 0) return textResult("No retweet drafts found.")
-      return textResult(JSON.stringify(drafts, null, 2))
+      return textResult(drafts.map(formatRetweetDraft).join("\n\n"))
     },
   )
 

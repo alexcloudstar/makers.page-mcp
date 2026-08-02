@@ -8,8 +8,6 @@ import { validateMediaPaths } from "./validate.js"
 
 export type ValidationResult = { ok: true } | { ok: false; error: string }
 
-export const DEFAULT_MAX_DM_LENGTH = 10_000
-
 const normalizeUsername = (username: string): string => username.replace(/^@/, "").trim()
 
 export const isGroupDraftTarget = (input: {

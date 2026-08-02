@@ -31,6 +31,15 @@ const handleXError = (error: unknown): CallToolResult => {
 
 const ANALYTICS_LOOKBACK_DAYS = 30
 
+const validateTimezone = (timezone: string): string | undefined => {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: timezone })
+    return undefined
+  } catch {
+    return `Invalid timezone: ${timezone}`
+  }
+}
+
 type AnalyticsToolDeps = {
   xClient?: XClient
 }
@@ -83,9 +92,12 @@ export const registerAnalyticsTools = (
       },
     },
     async ({ days, maxPosts, timezone, topPosts }) => {
+      const tz = timezone ?? "UTC"
+      const timezoneError = validateTimezone(tz)
+      if (timezoneError) return errorResult(timezoneError)
+
       try {
         const me = await xClient.getMe()
-        const tz = timezone ?? "UTC"
         const lookbackDays = days ?? 7
         const cap = maxPosts ?? 500
         const periodBounds = getPeriodBoundsUtc(lookbackDays, tz)
@@ -150,6 +162,10 @@ export const registerAnalyticsTools = (
       },
     },
     async ({ days, maxPosts, timezone, minPostsPerHour }) => {
+      const tz = timezone ?? "UTC"
+      const timezoneError = validateTimezone(tz)
+      if (timezoneError) return errorResult(timezoneError)
+
       try {
         const me = await xClient.getMe()
         const lookbackDays = days ?? 30
@@ -160,7 +176,7 @@ export const registerAnalyticsTools = (
         const analysis = analyzePostingTimes(
           posts,
           lookbackDays,
-          timezone ?? "UTC",
+          tz,
           minPostsPerHour ?? 2,
         )
         return jsonResult({ account: { id: me.id, username: me.username }, ...analysis })

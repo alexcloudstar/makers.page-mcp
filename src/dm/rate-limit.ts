@@ -57,41 +57,54 @@ export class DmRateLimiter {
     await writeFileAtomic(this.statePath, JSON.stringify(state, null, 2))
   }
 
+  private assertWithinLimits(
+    sentAt: number[],
+    lastSentAt: number | undefined,
+    now: number,
+  ): void {
+    if (lastSentAt !== undefined && now - lastSentAt < this.minIntervalMs) {
+      const waitSecs = Math.ceil((this.minIntervalMs - (now - lastSentAt)) / 1000)
+      throw new DmRateLimitError(
+        `DM rate limit: wait ${waitSecs}s before sending another message (min interval ${this.minIntervalMs}ms).`,
+      )
+    }
+
+    const inLastHour = sentAt.filter((timestamp) => now - timestamp <= 3_600_000).length
+    if (inLastHour >= this.maxPerHour) {
+      throw new DmRateLimitError(
+        `DM rate limit: ${this.maxPerHour} messages per hour reached. Try again later.`,
+      )
+    }
+
+    if (sentAt.length >= this.maxPerDay) {
+      throw new DmRateLimitError(
+        `DM rate limit: ${this.maxPerDay} messages per day reached. Try again tomorrow.`,
+      )
+    }
+  }
+
   /** Throws DmRateLimitError when a send would exceed configured limits. */
   async assertCanSend(now: number = Date.now()): Promise<void> {
     await lock.withLock(STATE_KEY, async () => {
       const state = await this.readState()
       const sentAt = pruneSentAt(state.sentAt, now)
+      this.assertWithinLimits(sentAt, state.lastSentAt, now)
+    })
+  }
 
-      if (state.lastSentAt !== undefined && now - state.lastSentAt < this.minIntervalMs) {
-        const waitSecs = Math.ceil((this.minIntervalMs - (now - state.lastSentAt)) / 1000)
-        throw new DmRateLimitError(
-          `DM rate limit: wait ${waitSecs}s before sending another message (min interval ${this.minIntervalMs}ms).`,
-        )
-      }
-
-      const inLastHour = sentAt.filter((timestamp) => now - timestamp <= 3_600_000).length
-      if (inLastHour >= this.maxPerHour) {
-        throw new DmRateLimitError(
-          `DM rate limit: ${this.maxPerHour} messages per hour reached. Try again later.`,
-        )
-      }
-
-      if (sentAt.length >= this.maxPerDay) {
-        throw new DmRateLimitError(
-          `DM rate limit: ${this.maxPerDay} messages per day reached. Try again tomorrow.`,
-        )
-      }
+  /** Atomically checks limits and records a send slot. Call immediately before the X API request. */
+  async reserveSendSlot(now: number = Date.now()): Promise<void> {
+    await lock.withLock(STATE_KEY, async () => {
+      const state = await this.readState()
+      const sentAt = pruneSentAt(state.sentAt, now)
+      this.assertWithinLimits(sentAt, state.lastSentAt, now)
+      sentAt.push(now)
+      await this.writeState({ sentAt, lastSentAt: now })
     })
   }
 
   async recordSend(now: number = Date.now()): Promise<void> {
-    await lock.withLock(STATE_KEY, async () => {
-      const state = await this.readState()
-      const sentAt = pruneSentAt(state.sentAt, now)
-      sentAt.push(now)
-      await this.writeState({ sentAt, lastSentAt: now })
-    })
+    await this.reserveSendSlot(now)
   }
 
   /** For tests and diagnostics. */

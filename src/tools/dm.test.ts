@@ -173,4 +173,31 @@ describe("send_dm_draft", () => {
 
     await rm(mediaDir, { recursive: true, force: true })
   })
+
+  test("returns success with warning when markSent fails after X send", async () => {
+    const baseStore = new DmDraftStore(config)
+    const draft = await baseStore.create({ text: "hey!", recipientId: "42" })
+    await baseStore.approve(draft.id)
+
+    const store = Object.assign(Object.create(Object.getPrototypeOf(baseStore)), baseStore, {
+      markSent: async () => {
+        throw new Error("disk full")
+      },
+    }) as DmDraftStore
+
+    const server = new StubServer()
+    registerDmTools(server as unknown as never, config, {
+      store,
+      rateLimiter: new DmRateLimiter(config),
+      xClient: stubXClient(),
+    })
+
+    const result = await server.call("send_dm_draft", { id: draft.id })
+    expect(result.isError).toBeFalsy()
+    expect(textOf(result)).toContain("WARNING")
+    expect(textOf(result)).toContain("event id: 1")
+
+    const updated = await baseStore.get(draft.id)
+    expect(updated.status).toBe("sending")
+  })
 })
