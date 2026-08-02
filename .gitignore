@@ -5,3 +5,5 @@ dist/
 .env
 .env.local
 .env.*.local
+# This repo locks with bun.lock; ignore npm's lockfile if created locally.
+package-lock.json

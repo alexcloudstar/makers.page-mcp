@@ -128,7 +128,7 @@ npx -y makers-page-mcp-auth   # npm install
 bun run auth                  # from source
 ```
 
-This prints an authorize URL: open it, log in as the X account you want to post from, and approve. The server captures the redirect locally and stores an access + refresh token at `~/.config/makers-page-mcp/credentials.json`. Tokens auto-refresh on future use; you shouldn't need to run this again unless you revoke access.
+This prints an authorize URL: open it, log in as the X account you want to post from, and approve. The server captures the redirect locally and stores an access + refresh token at `~/.config/makers-page-mcp/credentials.json`. Tokens auto-refresh on future use; re-run auth if you revoke access, or after upgrading to a version that adds scopes (e.g. `media.write` for image/GIF/video uploads).
 
 ### 4. Connect it to your coding agent
 
@@ -192,25 +192,79 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 
 | Tool | What it does |
 |------|--------------|
-| `create_draft` | Save a new draft post (`{ channel: "x", text }`). |
-| `list_drafts` | List drafts, optionally filtered by status. |
+| `create_draft` | Save a new draft post for X. Required: `{ channel: "x", text }`. Optional: `parts` (thread), `poll`, `mediaPaths` (absolute local paths, max 4), `quoteTweetId`, `communityId`, `shareWithFollowers`, `paidPartnership`. |
+| `list_drafts` | List drafts, optionally filtered by status (`draft`, `approved`, `rejected`, `publishing`, `published`, `deleted`). |
 | `get_draft` | Fetch a single draft by id. |
-| `update_draft` | Edit a draft's text. Resets an approved or rejected draft back to `draft` so it can be re-approved. |
+| `update_draft` | Edit draft content (same fields as create; pass `null` to clear an optional field). Resets an approved or rejected draft back to `draft` so it can be re-approved. |
 | `approve_draft` | Mark a draft approved. Required before publishing (unless approvals are disabled). |
-| `reject_draft` | Mark a draft rejected. Also the way to manually reconcile a draft stuck in `publishing` after a crashed/interrupted publish attempt. |
-| `publish_draft` | Publish an approved draft to X via `POST /2/tweets`. Returns the live URL. If the request fails ambiguously (e.g. a timeout), the draft is left in `publishing` rather than auto-retried, to avoid a duplicate paid post (see below). |
+| `reject_draft` | Mark a draft rejected. Also reconciles a draft stuck in `publishing` when nothing was posted (no recorded live ids). If live ids were recorded, use `delete_published_draft` instead. |
+| `publish_draft` | Publish an approved draft to X via `POST /2/tweets` (uploads media first when needed; threads reply to the previous part). Returns the live URL(s). If the request fails ambiguously (e.g. a timeout), or a thread fails mid-way, the draft is left in `publishing` rather than auto-retried. |
+| `edit_published_draft` | Edit the **root** post of a published draft (`edit_options.previous_post_id`). Re-attaches media/quote when present. Each edit creates a new post id, which is stored locally. Rejects polls and community posts. |
+| `delete_published_draft` | Delete every stored post id on X whenever live ids are recorded (published, partial `publishing`, or legacy/corrupt records), then mark the local draft `deleted`. |
 | `get_x_account` | Check connection status and show the connected `@handle`. |
-
+| `lookup_x_user` | Resolve an `@handle` to a user id (and DM eligibility). |
+| `get_dm_rate_limit` | Show local DM send limits and current usage. |
+| `create_dm_draft` | Save a draft DM. Required: `text` plus a target — `recipientId`/`recipientUsername` (1:1), `participantIds`/`participantUsernames` with `conversationType: "group"` (new group), or `conversationId` (reply). Optional: one `mediaPaths` entry. |
+| `list_dm_drafts` | List DM drafts, optionally filtered by status (`draft`, `approved`, `rejected`, `sending`, `sent`, `deleted`). |
+| `get_dm_draft` | Fetch a single DM draft by id. |
+| `update_dm_draft` | Edit a DM draft (pass `null` to clear optional fields). Resets approved drafts to `draft`. |
+| `approve_dm_draft` | Mark a DM draft approved. Required before sending (unless approvals are disabled). |
+| `reject_dm_draft` | Mark a DM draft rejected, or reconcile one stuck in `sending`. |
+| `send_dm_draft` | Send an approved DM via the X API. Enforces local rate limits. |
+| `list_dm_events` | Read recent events in a 1:1 DM thread (`participantId` or `username`). |
+| `list_dm_inbox` | Read recent DM events across all conversations (inbox view for agent context). |
+| `list_dm_conversation_events` | Read recent events in a conversation by `conversationId` (1:1 or group thread). |
+| `get_x_post_metrics` | Fetch impressions, likes, reposts, replies, quotes, and bookmarks for up to 100 post ids. |
+| `get_x_account_summary` | Calendar-day impressions and engagements via `GET /2/tweets/analytics` (aligned with x.com account analytics). Period totals and top posts for the window. |
+| `analyze_x_posting_times` | Hour-of-day analysis: avg impressions and engagement rate by when you posted. |
+| `create_retweet_draft` | Save a draft retweet or undo-retweet for a post id. Not executed until approved. |
+| `list_retweet_drafts` | List retweet/undo drafts, optionally filtered by status. |
+| `get_retweet_draft` | Fetch a single retweet/undo draft by id. |
+| `approve_retweet_draft` | Mark a retweet/undo draft approved (required before execution unless approvals disabled). |
+| `reject_retweet_draft` | Mark a retweet/undo draft rejected; also reconcile drafts stuck in executing. |
+| `retweet_post` | Retweet an approved draft immediately via `POST /2/users/:id/retweets`. |
+| `undo_retweet` | Undo an approved retweet draft via `DELETE /2/users/:id/retweets/:tweet_id`. |
 Typical agent flow: `create_draft` → show the user the draft → user says "approve" → `approve_draft` → `publish_draft`.
+
+Typical retweet flow: `create_retweet_draft` → user approves → `approve_retweet_draft` → `retweet_post` (or `undo_retweet` for undo drafts).
+
+Typical DM flow: `lookup_x_user` (optional) → `create_dm_draft` → user approves → `approve_dm_draft` → `send_dm_draft`.
+
+To reply in context: `list_dm_inbox` or `list_dm_conversation_events` → draft with `conversationId` → approve → send.
+
+### X create/update fields
+
+| Field | Notes |
+|------|--------|
+| `text` | Post copy. Must equal `parts[0]` when `parts` is set. On `update_draft`, if both `text` and `parts` are sent and disagree, **`text` wins** and becomes `parts[0]`. |
+| `parts` | Thread of 2+ posts. Polls are not allowed on threads. |
+| `poll` | `{ options: string[2..4], durationMinutes: 5..10080 }`. Mutually exclusive with `mediaPaths` and `quoteTweetId`. |
+| `mediaPaths` | Absolute local paths (`.jpg`/`.jpeg`/`.png`/`.webp`/`.gif`/`.mp4`), 1–4 files. Up to 4 images, or one GIF, or one video (no mixing). MIME/category is chosen from the **file extension** (contents are not sniffed). Requires re-auth with `media.write` (see below). |
+| `quoteTweetId` | Quote another post. **Enterprise-only** on self-serve / pay-per-use X API tiers — the tool still sends it; X may reject. |
+| `communityId` / `shareWithFollowers` | Post to a Community; `shareWithFollowers` requires `communityId`. |
+| `paidPartnership` | Sets `paid_partnership: true` on create (and on edit when provided). |
+
+### Caveats (X product limits)
+
+- **Re-auth for media:** OAuth scopes now include `media.write`. If you authorized before this change, run `makers-page-mcp-auth` / `bun run auth` once more.
+- **Re-auth for DMs:** OAuth scopes now include `dm.read` and `dm.write`. Re-run auth after upgrading to send or read DMs.
+- **Quote posts:** OpenAPI documents quote as Enterprise-only on self-serve; expect API errors on lower tiers.
+- **Edit:** Requires **X Premium**, roughly a **30-minute** window and **up to 5 edits** from the original. Each edit returns a **new post id** (we update the local draft). Polls and community posts are not editable.
+- **Replies:** Self-serve apps can create **self-threads** (reply to your own previous part). Replies to *other* accounts are blocked unless summoned.
+- **Cashtags:** Self-serve allows **at most one cashtag** (`$TICKER`) per post.
 
 ## If a publish attempt fails ambiguously
 
 `publish_draft` marks a draft `publishing` before calling the X API, and only clears that if the API gives a
 definitive answer (a real HTTP response, or a clear "not authenticated" error). If the request instead fails
 in a way that could mean X received it anyway (a timeout or network drop), the draft is deliberately left in
-`publishing` and **not** auto-reverted, so an agent can't retry and risk a second, real, paid post. In that
-case: check your X account for the post yourself, then call `reject_draft` (if it didn't go out) or
-`update_draft` (to edit and reset it to `draft`) to reconcile the local record.
+`publishing` and **not** auto-reverted, so an agent can't retry and risk a second, real, paid post.
+
+Reconciliation:
+
+- **Nothing posted** (no live ids recorded): call `reject_draft` or `update_draft` to reset.
+- **Partial thread** (some ids recorded): do **not** retry `publish_draft`. Call `delete_published_draft` to remove the live posts, or finish the remainder on X manually.
+- **Ambiguous single post** (may or may not have posted, no ids recorded): check X yourself; if it did not post, reset with `reject_draft` / `update_draft`; if it did, leave the draft as-is and note the URL.
 
 ## Configuration
 
@@ -225,6 +279,10 @@ Environment variables:
 | `MAKERS_PAGE_DATA_DIR` | `~/.local/share/makers-page-mcp` | Where drafts are stored. |
 | `MAKERS_PAGE_REQUIRE_APPROVAL` | `true` | Set to `false` to let agents publish drafts without a separate approval step. |
 | `MAKERS_PAGE_MAX_POST_LENGTH` | `280` | Max characters per post (X's weighted count: URLs count as 23, emoji count once); raise this if you're on X Premium. |
+| `MAKERS_PAGE_MAX_DM_LENGTH` | `10000` | Max characters per DM. |
+| `MAKERS_PAGE_DM_MAX_PER_HOUR` | `10` | Local cap on DM sends per rolling hour (before calling X). |
+| `MAKERS_PAGE_DM_MAX_PER_DAY` | `50` | Local cap on DM sends per rolling 24 hours. |
+| `MAKERS_PAGE_DM_MIN_INTERVAL_MS` | `3000` | Minimum milliseconds between consecutive DM sends. |
 
 ## Roadmap
 
@@ -232,7 +290,10 @@ Destination: **one local indie stack MCP** that already knows the founder tools 
 
 **Shipped**
 
-- Text-only posts to X (no media, threads, or polls), with draft → approve → publish and crash-safe publish semantics.
+- X manage-posts: text, threads, polls, media (chunked upload), quote, community + `share_with_followers`, paid partnership, edit, and delete — still behind draft → approve → publish with crash-safe / no-auto-retry semantics.
+- X DMs: draft → approve → send (1:1 text, media attachment, group conversations) with local rate limits; read inbox and thread events; `@handle` lookup.
+- X analytics (read-only): post metrics, account summary (today + top posts), posting-time analysis. No local DB; fetches from X API on demand.
+- X retweets: draft → approve → `retweet_post` / `undo_retweet` (immediate; no scheduling).
 
 **Next**
 

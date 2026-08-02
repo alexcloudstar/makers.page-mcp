@@ -19,9 +19,17 @@ export type Config = {
   configDir: string
   dataDir: string
   draftsDir: string
+  dmDraftsDir: string
+  retweetDraftsDir: string
   credentialsPath: string
   requireApproval: boolean
   maxPostLength: number
+  maxDmLength: number
+  dmRateLimit: {
+    maxPerHour: number
+    maxPerDay: number
+    minIntervalMs: number
+  }
   x: {
     clientId: string | undefined
     clientSecret: string | undefined
@@ -30,6 +38,10 @@ export type Config = {
 }
 
 export const DEFAULT_MAX_POST_LENGTH = 280
+export const DEFAULT_MAX_DM_LENGTH = 10_000
+export const DEFAULT_DM_MAX_PER_HOUR = 10
+export const DEFAULT_DM_MAX_PER_DAY = 50
+export const DEFAULT_DM_MIN_INTERVAL_MS = 3_000
 
 // Exported for testing; not part of the public module surface otherwise.
 export const resolveMaxPostLength = (): number => {
@@ -49,6 +61,23 @@ export const resolveMaxPostLength = (): number => {
   return Math.floor(parsed)
 }
 
+const resolvePositiveInt = (
+  envName: string,
+  fallback: number,
+): number => {
+  const raw = process.env[envName]
+  if (raw === undefined) return fallback
+
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn(
+      `Ignoring invalid ${envName}="${raw}" (must be a positive number); falling back to ${fallback}.`,
+    )
+    return fallback
+  }
+  return Math.floor(parsed)
+}
+
 export const loadConfig = (): Config => {
   const configDir = resolveConfigDir()
   const dataDir = resolveDataDir()
@@ -57,9 +86,17 @@ export const loadConfig = (): Config => {
     configDir,
     dataDir,
     draftsDir: path.join(dataDir, "drafts"),
+    dmDraftsDir: path.join(dataDir, "dm-drafts"),
+    retweetDraftsDir: path.join(dataDir, "retweet-drafts"),
     credentialsPath: path.join(configDir, "credentials.json"),
     requireApproval: process.env.MAKERS_PAGE_REQUIRE_APPROVAL !== "false",
     maxPostLength: resolveMaxPostLength(),
+    maxDmLength: resolvePositiveInt("MAKERS_PAGE_MAX_DM_LENGTH", DEFAULT_MAX_DM_LENGTH),
+    dmRateLimit: {
+      maxPerHour: resolvePositiveInt("MAKERS_PAGE_DM_MAX_PER_HOUR", DEFAULT_DM_MAX_PER_HOUR),
+      maxPerDay: resolvePositiveInt("MAKERS_PAGE_DM_MAX_PER_DAY", DEFAULT_DM_MAX_PER_DAY),
+      minIntervalMs: resolvePositiveInt("MAKERS_PAGE_DM_MIN_INTERVAL_MS", DEFAULT_DM_MIN_INTERVAL_MS),
+    },
     x: {
       clientId: process.env.X_CLIENT_ID,
       clientSecret: process.env.X_CLIENT_SECRET,

@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { validateXPostText, weightedLength } from "./validate.js"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import {
+  mergeDraftFields,
+  validateEditEligibility,
+  validateXDraft,
+  validateXPostText,
+  weightedLength,
+} from "./validate.js"
+import type { Draft } from "../../drafts/types.js"
 
 describe("weightedLength", () => {
   test("counts plain ASCII text by code point", () => {
@@ -89,3 +99,228 @@ describe("validateXPostText", () => {
     expect(result.ok).toBe(false)
   })
 })
+
+describe("validateXDraft", () => {
+  test("rejects poll + media mutual exclusion", async () => {
+    const result = await validateXDraft(
+      {
+        text: "hello",
+        poll: { options: ["a", "b"], durationMinutes: 60 },
+        mediaPaths: ["/tmp/a.png"],
+      },
+      280,
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain("mutually exclusive")
+  })
+
+  test("rejects poll + quote mutual exclusion", async () => {
+    const result = await validateXDraft(
+      {
+        text: "hello",
+        poll: { options: ["a", "b"], durationMinutes: 60 },
+        quoteTweetId: "1",
+      },
+      280,
+    )
+    expect(result.ok).toBe(false)
+  })
+
+  test("rejects poll on multi-part threads", async () => {
+    const result = await validateXDraft(
+      {
+        text: "one",
+        parts: ["one", "two"],
+        poll: { options: ["a", "b"], durationMinutes: 60 },
+      },
+      280,
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain("Polls cannot")
+  })
+
+  test("rejects parts when text !== parts[0]", async () => {
+    const result = await validateXDraft(
+      {
+        text: "nope",
+        parts: ["one", "two"],
+      },
+      280,
+    )
+    expect(result.ok).toBe(false)
+  })
+
+  test("rejects shareWithFollowers without communityId", async () => {
+    const result = await validateXDraft(
+      {
+        text: "hello",
+        shareWithFollowers: true,
+      },
+      280,
+    )
+    expect(result.ok).toBe(false)
+  })
+
+  test("rejects poll with fewer than 2 options", async () => {
+    const result = await validateXDraft(
+      {
+        text: "hello",
+        poll: { options: ["only"], durationMinutes: 60 },
+      },
+      280,
+    )
+    expect(result.ok).toBe(false)
+  })
+
+  test("rejects relative media paths", async () => {
+    const result = await validateXDraft(
+      {
+        text: "hello",
+        mediaPaths: ["relative/pic.png"],
+      },
+      280,
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain("absolute")
+  })
+
+  test("accepts an absolute existing image path", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "validate-media-"))
+    try {
+      const filePath = path.join(dir, "pic.png")
+      await writeFile(filePath, Buffer.alloc(8, 1))
+      const result = await validateXDraft(
+        {
+          text: "hello",
+          mediaPaths: [filePath],
+        },
+        280,
+      )
+      expect(result).toEqual({ ok: true })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects mixing a GIF with an image", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "validate-mix-"))
+    try {
+      const png = path.join(dir, "pic.png")
+      const gif = path.join(dir, "anim.gif")
+      await writeFile(png, Buffer.alloc(8, 1))
+      await writeFile(gif, Buffer.alloc(8, 1))
+      const result = await validateXDraft(
+        {
+          text: "hello",
+          mediaPaths: [png, gif],
+        },
+        280,
+      )
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toContain("GIF")
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects more than one video", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "validate-vids-"))
+    try {
+      const a = path.join(dir, "a.mp4")
+      const b = path.join(dir, "b.mp4")
+      await writeFile(a, Buffer.alloc(8, 1))
+      await writeFile(b, Buffer.alloc(8, 1))
+      const result = await validateXDraft(
+        {
+          text: "hello",
+          mediaPaths: [a, b],
+        },
+        280,
+      )
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toContain("one video")
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects zero-byte media files", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "validate-empty-"))
+    try {
+      const filePath = path.join(dir, "empty.png")
+      await writeFile(filePath, Buffer.alloc(0))
+      const result = await validateXDraft(
+        {
+          text: "hello",
+          mediaPaths: [filePath],
+        },
+        280,
+      )
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toContain("empty")
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("accepts a valid thread", async () => {
+    const result = await validateXDraft(
+      {
+        text: "one",
+        parts: ["one", "two"],
+      },
+      280,
+    )
+    expect(result).toEqual({ ok: true })
+  })
+})
+
+describe("mergeDraftFields", () => {
+  test("text-only update on a thread syncs parts[0] for validation", () => {
+    const merged = mergeDraftFields(
+      {
+        text: "one",
+        parts: ["one", "two"],
+      },
+      { text: "one edited" },
+    )
+    expect(merged.text).toBe("one edited")
+    expect(merged.parts).toEqual(["one edited", "two"])
+  })
+})
+
+describe("validateEditEligibility", () => {
+  const base = (overrides: Partial<Draft> = {}): Draft => ({
+    id: "00000000-0000-0000-0000-000000000001",
+    channel: "x",
+    text: "hello",
+    status: "published",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    externalId: "1",
+    url: "https://x.com/i/web/status/1",
+    ...overrides,
+  })
+
+  test("accepts a plain published draft", () => {
+    expect(validateEditEligibility(base())).toEqual({ ok: true })
+  })
+
+  test("rejects poll drafts", () => {
+    const result = validateEditEligibility(
+      base({ poll: { options: ["a", "b"], durationMinutes: 60 } }),
+    )
+    expect(result.ok).toBe(false)
+  })
+
+  test("rejects community drafts", () => {
+    const result = validateEditEligibility(base({ communityId: "c1" }))
+    expect(result.ok).toBe(false)
+  })
+
+  test("rejects non-published drafts", () => {
+    const result = validateEditEligibility(base({ status: "approved" }))
+    expect(result.ok).toBe(false)
+  })
+})
+
