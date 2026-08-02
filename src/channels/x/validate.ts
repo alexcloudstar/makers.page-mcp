@@ -218,6 +218,37 @@ export type XDraftFields = {
   paidPartnership?: boolean
 }
 
+const validateDraftText = (
+  input: Pick<XDraftFields, "text" | "parts">,
+  maxLength: number,
+  hasPoll: boolean,
+): ValidationResult => {
+  if (input.parts === undefined) {
+    return validateXPostText(input.text, maxLength)
+  }
+
+  if (input.parts.length < 2) {
+    return { ok: false, error: "parts must contain at least 2 items when set (otherwise use text alone)." }
+  }
+
+  if (input.parts[0] !== input.text) {
+    return { ok: false, error: "text must equal parts[0] when parts is set." }
+  }
+
+  if (hasPoll) {
+    return { ok: false, error: "Polls cannot be used on multi-part threads." }
+  }
+
+  for (const [index, part] of input.parts.entries()) {
+    const partValidation = validateXPostText(part, maxLength)
+    if (!partValidation.ok) {
+      return { ok: false, error: `parts[${index}]: ${partValidation.error}` }
+    }
+  }
+
+  return { ok: true }
+}
+
 export const validateXDraft = async (
   input: XDraftFields,
   maxLength: number,
@@ -238,26 +269,8 @@ export const validateXDraft = async (
     return { ok: false, error: "shareWithFollowers requires communityId." }
   }
 
-  if (input.parts !== undefined) {
-    if (input.parts.length < 2) {
-      return { ok: false, error: "parts must contain at least 2 items when set (otherwise use text alone)." }
-    }
-    if (input.parts[0] !== input.text) {
-      return { ok: false, error: "text must equal parts[0] when parts is set." }
-    }
-    if (hasPoll) {
-      return { ok: false, error: "Polls cannot be used on multi-part threads." }
-    }
-    for (let i = 0; i < input.parts.length; i++) {
-      const partValidation = validateXPostText(input.parts[i]!, maxLength)
-      if (!partValidation.ok) {
-        return { ok: false, error: `parts[${i}]: ${partValidation.error}` }
-      }
-    }
-  } else {
-    const textValidation = validateXPostText(input.text, maxLength)
-    if (!textValidation.ok) return textValidation
-  }
+  const textValidation = validateDraftText(input, maxLength, hasPoll)
+  if (!textValidation.ok) return textValidation
 
   if (hasPoll) {
     const pollValidation = validatePoll(input.poll!)

@@ -10,6 +10,50 @@ export type ValidationResult = { ok: true } | { ok: false; error: string }
 
 const normalizeUsername = (username: string): string => username.replace(/^@/, "").trim()
 
+/** undefined = keep current, null = clear field, value = replace. */
+const mergeOptionalField = <T>(
+  current: T | undefined,
+  update: T | null | undefined,
+): T | undefined => {
+  if (update === undefined) return current
+  if (update === null) return undefined
+  return update
+}
+
+const mergeUsernameField = (
+  current: string | undefined,
+  update: string | null | undefined,
+): string | undefined => {
+  if (update === undefined) return current
+  if (update === null) return undefined
+  if (!update) return current
+  return normalizeUsername(update)
+}
+
+const mergeUsernameListField = (
+  current: string[] | undefined,
+  update: string[] | null | undefined,
+): string[] | undefined => {
+  if (update === undefined) return current
+  if (update === null) return undefined
+  return update.map(normalizeUsername)
+}
+
+export const mergeDmDraftFields = (current: DmDraft, update: UpdateDmDraftInput): DmDraft => ({
+  ...current,
+  text: update.text ?? current.text,
+  conversationType: mergeOptionalField(current.conversationType, update.conversationType),
+  recipientId: mergeOptionalField(current.recipientId, update.recipientId),
+  recipientUsername: mergeUsernameField(current.recipientUsername, update.recipientUsername),
+  participantIds: mergeOptionalField(current.participantIds, update.participantIds),
+  participantUsernames: mergeUsernameListField(
+    current.participantUsernames,
+    update.participantUsernames,
+  ),
+  conversationId: mergeOptionalField(current.conversationId, update.conversationId),
+  mediaPaths: mergeOptionalField(current.mediaPaths, update.mediaPaths),
+})
+
 export const isGroupDraftTarget = (input: {
   conversationType?: DmConversationType
   participantIds?: string[]
@@ -97,37 +141,6 @@ export const validateCreateDmDraftInput = async (
 
   return { ok: true }
 }
-
-export const mergeDmDraftFields = (current: DmDraft, update: UpdateDmDraftInput): DmDraft => ({
-  ...current,
-  text: update.text ?? current.text,
-  conversationType:
-    update.conversationType === null ? undefined : update.conversationType ?? current.conversationType,
-  recipientId:
-    update.recipientId === null ? undefined : update.recipientId ?? current.recipientId,
-  recipientUsername:
-    update.recipientUsername === null
-      ? undefined
-      : update.recipientUsername
-        ? normalizeUsername(update.recipientUsername)
-        : current.recipientUsername,
-  participantIds:
-    update.participantIds === null ? undefined : update.participantIds ?? current.participantIds,
-  participantUsernames:
-    update.participantUsernames === null
-      ? undefined
-      : update.participantUsernames
-        ? update.participantUsernames.map(normalizeUsername)
-        : current.participantUsernames,
-  conversationId:
-    update.conversationId === null ? undefined : update.conversationId ?? current.conversationId,
-  mediaPaths:
-    update.mediaPaths === null
-      ? undefined
-      : update.mediaPaths !== undefined
-        ? update.mediaPaths
-        : current.mediaPaths,
-})
 
 export const validateDmDraft = async (draft: DmDraft, maxLength: number): Promise<ValidationResult> => {
   const textValidation = validateDmText(draft.text, maxLength)
