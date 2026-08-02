@@ -56,7 +56,7 @@ Today that means approval-gated publishing to X. Next: the rest of the stack (se
 - **Approval-gated by default.** Every post is a `draft` until you explicitly call `approve_draft`. `publish_draft` refuses to post anything that hasn't been approved, unless you turn that off yourself. The same pattern will apply to anything that spends money or posts publicly.
 - **Built for real, paid API calls.** X's write API costs money per post (see below). The draft/approve/publish split exists so an agent can never spam your account or your wallet.
 - **Crash-safe by design.** Publishing uses atomic file writes, keyed locks around concurrent operations on the same draft, and a three-way error split (definitive failure, ambiguous network failure, unexpected error) so a dropped connection can never turn into a silent duplicate post.
-- **Local-first.** Drafts and credentials live on your machine (`~/.local/share/makers-page-mcp`, `~/.config/makers-page-mcp`), not in someone else's cloud.
+- **Local-first.** Drafts and credentials live on your machine (`~/.local/share/makers-page-mcp`, `~/.config/makers-page-mcp`), written with `0600` permissions, not in someone else's cloud.
 - **Zero lock-in.** It's a stdio MCP server distributed on npm under the MIT license. Read the source, fork it, self-host it.
 
 ## How it compares
@@ -85,7 +85,7 @@ As of 2026, X's API is pay-per-use for self-serve developer accounts: creating a
 3. Set **App permissions** to **Read and write**.
 4. Set the **Type of App** to **Web App, Automated App or Bot** (this gives you a Client ID, and a Client Secret if confidential).
 5. Add an exact-match **Callback URI / Redirect URL**: `http://127.0.0.1:8879/callback`
-   (or your own value; just set `X_REDIRECT_URI` to match in step 3 below).
+   (must be a **loopback** host: `127.0.0.1`, `localhost`, or `::1` — non-loopback URIs are rejected at auth time).
 6. Copy the **Client ID** (and **Client Secret**, if shown).
 
 ### 2. Install
@@ -237,9 +237,9 @@ To reply in context: `list_dm_inbox` or `list_dm_conversation_events` → draft 
 | Field | Notes |
 |------|--------|
 | `text` | Post copy. Must equal `parts[0]` when `parts` is set. On `update_draft`, if both `text` and `parts` are sent and disagree, **`text` wins** and becomes `parts[0]`. |
-| `parts` | Thread of 2+ posts. Polls are not allowed on threads. |
+| `parts` | Thread of 2+ posts. Each part after the first replies to the previous one (standard X thread chain). Polls are not allowed on threads. |
 | `poll` | `{ options: string[2..4], durationMinutes: 5..10080 }`. Mutually exclusive with `mediaPaths` and `quoteTweetId`. |
-| `mediaPaths` | Absolute local paths (`.jpg`/`.jpeg`/`.png`/`.webp`/`.gif`/`.mp4`), 1–4 files. Up to 4 images, or one GIF, or one video (no mixing). MIME/category is chosen from the **file extension** (contents are not sniffed). Requires re-auth with `media.write` (see below). |
+| `mediaPaths` | Absolute local paths (`.jpg`/`.jpeg`/`.png`/`.webp`/`.gif`/`.mp4`), 1–4 files. Up to 4 images, or one GIF, or one video (no mixing). Symlinks are rejected; MIME/category is chosen from the **file extension** and verified with **magic-byte sniffing** before upload. Requires re-auth with `media.write` (see below). |
 | `quoteTweetId` | Quote another post. **Enterprise-only** on self-serve / pay-per-use X API tiers — the tool still sends it; X may reject. |
 | `communityId` / `shareWithFollowers` | Post to a Community; `shareWithFollowers` requires `communityId`. |
 | `paidPartnership` | Sets `paid_partnership: true` on create (and on edit when provided). |
@@ -274,7 +274,7 @@ Environment variables:
 |----------|---------|---------|
 | `X_CLIENT_ID` | *(none)* | Required. X OAuth 2.0 Client ID. |
 | `X_CLIENT_SECRET` | *(none)* | Set if your X app is a confidential client. |
-| `X_REDIRECT_URI` | `http://127.0.0.1:8879/callback` | Must match the callback registered in the X developer portal. |
+| `X_REDIRECT_URI` | `http://127.0.0.1:8879/callback` | Must match the callback registered in the X developer portal **and** use a loopback host (`127.0.0.1`, `localhost`, or `::1`). |
 | `MAKERS_PAGE_CONFIG_DIR` | `~/.config/makers-page-mcp` | Where credentials are stored. |
 | `MAKERS_PAGE_DATA_DIR` | `~/.local/share/makers-page-mcp` | Where drafts are stored. |
 | `MAKERS_PAGE_REQUIRE_APPROVAL` | `true` | Set to `false` to let agents publish drafts without a separate approval step. |
@@ -331,7 +331,7 @@ No, not by default. Every draft starts in `draft` status, and `publish_draft` re
 <summary><strong>Is this a hosted service? Where does my data go?</strong></summary>
 <br>
 
-It's a local process. Drafts are stored as files under `MAKERS_PAGE_DATA_DIR` (default `~/.local/share/makers-page-mcp`), and your X OAuth tokens live under `MAKERS_PAGE_CONFIG_DIR` (default `~/.config/makers-page-mcp/credentials.json`, `0600` permissions). Nothing goes through a third-party server; the server talks directly to `api.x.com`.
+It's a local process. Drafts, DM drafts, retweet drafts, and rate-limit state are stored as files under `MAKERS_PAGE_DATA_DIR` (default `~/.local/share/makers-page-mcp`); your X OAuth tokens live under `MAKERS_PAGE_CONFIG_DIR` (default `~/.config/makers-page-mcp/credentials.json`). All of these files are written with `0600` permissions. Nothing goes through a third-party server; the server talks directly to `api.x.com`.
 
 </details>
 

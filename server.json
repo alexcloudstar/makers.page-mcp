@@ -8,12 +8,12 @@
     "url": "https://github.com/alexcloudstar/makers.page-mcp",
     "source": "github"
   },
-  "version": "0.1.2",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "makers-page-mcp",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },
@@ -33,7 +33,7 @@
           "name": "X_CLIENT_SECRET"
         },
         {
-          "description": "OAuth redirect URI, must exactly match the callback registered in the X developer portal",
+          "description": "OAuth redirect URI (loopback only: 127.0.0.1, localhost, or ::1). Must exactly match the callback registered in the X developer portal.",
           "isRequired": false,
           "format": "string",
           "isSecret": false,
