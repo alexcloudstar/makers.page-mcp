@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
@@ -21,12 +21,24 @@ class StubServer {
 
   call(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
     const handler = this.handlers.get(name)
-    if (!handler) throw new Error(`Tool "${name}" was not registered.`)
+    if (!handler) throw new Error('Tool "' + name + '" was not registered.')
     return handler(args)
   }
 }
 
 const textOf = (result: CallToolResult): string => (result.content[0] as { text: string }).text
+
+const stubXClient = (overrides: Record<string, unknown> = {}) => ({
+  getUserByUsername: async () => ({ id: "42", username: "u", name: "U" }),
+  sendDmByParticipantId: async () => ({ dmEventId: "1", dmConversationId: "2" }),
+  sendDmByConversationId: async () => ({ dmEventId: "1", dmConversationId: "2" }),
+  listDmEventsByParticipant: async () => [],
+  listDmEventsByConversationId: async () => [],
+  listDmInbox: async () => [],
+  createGroupDmConversation: async () => ({ dmEventId: "g-1", dmConversationId: "gc-1" }),
+  uploadMedia: async () => "media-1",
+  ...overrides,
+})
 
 let dmDraftsDir: string
 let dataDir: string
@@ -59,18 +71,15 @@ describe("send_dm_draft", () => {
     registerDmTools(server as unknown as never, config, {
       store,
       rateLimiter: new DmRateLimiter(config),
-      xClient: {
-        getUserByUsername: async () => ({ id: "42", username: "u", name: "U" }),
-        sendDmByParticipantId: async (participantId, input) => {
-          sends.push(`${participantId}:${input.text}`)
+      xClient: stubXClient({
+        sendDmByParticipantId: async (participantId: string, input: { text: string }) => {
+          sends.push(participantId + ":" + input.text)
           return { dmEventId: "evt-1", dmConversationId: "conv-1" }
         },
         sendDmByConversationId: async () => {
           throw new Error("unexpected")
         },
-        listDmEventsByParticipant: async () => [],
-        uploadMedia: async () => "media-1",
-      },
+      }),
     })
 
     const result = await server.call("send_dm_draft", { id: draft.id })
@@ -91,17 +100,77 @@ describe("send_dm_draft", () => {
     registerDmTools(server as unknown as never, config, {
       store,
       rateLimiter: new DmRateLimiter(config),
-      xClient: {
-        getUserByUsername: async () => ({ id: "42", username: "u", name: "U" }),
-        sendDmByParticipantId: async () => ({ dmEventId: "1", dmConversationId: "2" }),
-        sendDmByConversationId: async () => ({ dmEventId: "1", dmConversationId: "2" }),
-        listDmEventsByParticipant: async () => [],
-        uploadMedia: async () => "m",
-      },
+      xClient: stubXClient(),
     })
 
     const result = await server.call("send_dm_draft", { id: draft.id })
     expect(result.isError).toBe(true)
     expect(textOf(result)).toContain("approve_dm_draft")
+  })
+
+  test("sends a group dm via createGroupDmConversation", async () => {
+    const store = new DmDraftStore(config)
+    const draft = await store.create({
+      text: "hey group",
+      conversationType: "group",
+      participantIds: ["1", "2"],
+    })
+    await store.approve(draft.id)
+
+    let groupCalled = false
+    const server = new StubServer()
+    registerDmTools(server as unknown as never, config, {
+      store,
+      rateLimiter: new DmRateLimiter(config),
+      xClient: stubXClient({
+        createGroupDmConversation: async (ids: string[], input: { text: string }) => {
+          groupCalled = true
+          expect(ids).toEqual(["1", "2"])
+          expect(input.text).toBe("hey group")
+          return { dmEventId: "gevt", dmConversationId: "gconv" }
+        },
+      }),
+    })
+
+    const result = await server.call("send_dm_draft", { id: draft.id })
+    expect(result.isError).toBeFalsy()
+    expect(groupCalled).toBe(true)
+  })
+
+  test("sends dm with media attachment", async () => {
+    const mediaDir = await mkdtemp(path.join(os.tmpdir(), "dm-media-"))
+    const mediaPath = path.join(mediaDir, "x.png")
+    await writeFile(mediaPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0, 0, 0]))
+
+    const store = new DmDraftStore(config)
+    const draft = await store.create({
+      text: "pic",
+      recipientId: "42",
+      mediaPaths: [mediaPath],
+    })
+    await store.approve(draft.id)
+
+    let uploaded = false
+    const server = new StubServer()
+    registerDmTools(server as unknown as never, config, {
+      store,
+      rateLimiter: new DmRateLimiter(config),
+      xClient: stubXClient({
+        sendDmByParticipantId: async (_id: string, input: { text: string; mediaIds?: string[] }) => {
+          expect(input.mediaIds).toEqual(["media-xyz"])
+          return { dmEventId: "e1", dmConversationId: "c1" }
+        },
+        uploadMedia: async () => {
+          uploaded = true
+          return "media-xyz"
+        },
+      }),
+    })
+
+    const result = await server.call("send_dm_draft", { id: draft.id })
+    expect(result.isError).toBeFalsy()
+    expect(uploaded).toBe(true)
+
+    await rm(mediaDir, { recursive: true, force: true })
   })
 })

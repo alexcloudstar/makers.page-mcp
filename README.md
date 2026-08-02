@@ -204,7 +204,7 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 | `get_x_account` | Check connection status and show the connected `@handle`. |
 | `lookup_x_user` | Resolve an `@handle` to a user id (and DM eligibility). |
 | `get_dm_rate_limit` | Show local DM send limits and current usage. |
-| `create_dm_draft` | Save a draft DM. Required: `text` plus `recipientId` or `recipientUsername` (or `conversationId`). Optional: one `mediaPaths` entry. |
+| `create_dm_draft` | Save a draft DM. Required: `text` plus a target — `recipientId`/`recipientUsername` (1:1), `participantIds`/`participantUsernames` with `conversationType: "group"` (new group), or `conversationId` (reply). Optional: one `mediaPaths` entry. |
 | `list_dm_drafts` | List DM drafts, optionally filtered by status (`draft`, `approved`, `rejected`, `sending`, `sent`, `deleted`). |
 | `get_dm_draft` | Fetch a single DM draft by id. |
 | `update_dm_draft` | Edit a DM draft (pass `null` to clear optional fields). Resets approved drafts to `draft`. |
@@ -212,10 +212,14 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 | `reject_dm_draft` | Mark a DM draft rejected, or reconcile one stuck in `sending`. |
 | `send_dm_draft` | Send an approved DM via the X API. Enforces local rate limits. |
 | `list_dm_events` | Read recent events in a 1:1 DM thread (`participantId` or `username`). |
+| `list_dm_inbox` | Read recent DM events across all conversations (inbox view for agent context). |
+| `list_dm_conversation_events` | Read recent events in a conversation by `conversationId` (1:1 or group thread). |
 
 Typical agent flow: `create_draft` → show the user the draft → user says "approve" → `approve_draft` → `publish_draft`.
 
 Typical DM flow: `lookup_x_user` (optional) → `create_dm_draft` → user approves → `approve_dm_draft` → `send_dm_draft`.
+
+To reply in context: `list_dm_inbox` or `list_dm_conversation_events` → draft with `conversationId` → approve → send.
 
 ### X create/update fields
 
@@ -276,7 +280,7 @@ Destination: **one local indie stack MCP** that already knows the founder tools 
 **Shipped**
 
 - X manage-posts: text, threads, polls, media (chunked upload), quote, community + `share_with_followers`, paid partnership, edit, and delete — still behind draft → approve → publish with crash-safe / no-auto-retry semantics.
-- X DMs: draft → approve → send with local rate limits (hourly, daily, min interval); read conversation events; `@handle` lookup.
+- X DMs: draft → approve → send (1:1 text, media attachment, group conversations) with local rate limits; read inbox and thread events; `@handle` lookup.
 
 **Next**
 

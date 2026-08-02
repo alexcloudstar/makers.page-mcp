@@ -74,6 +74,8 @@ export type DmEventSummary = {
   text?: string
   createdAt?: string
   senderId?: string
+  conversationId?: string
+  senderUsername?: string
 }
 
 const buildDmMessageBody = (input: CreateDmMessageInput): Record<string, unknown> => {
@@ -445,9 +447,19 @@ export class XClient {
   ): Promise<DmEventSummary[]> {
     const capped = Math.min(Math.max(maxResults, 1), 100)
     const result = await this.request<{
-      data?: Array<{ id: string; text?: string; created_at?: string; sender_id?: string }>
+      data?: Array<{
+        id: string
+        text?: string
+        created_at?: string
+        sender_id?: string
+        dm_conversation_id?: string
+      }>
     }>(
-      `/2/dm_conversations/with/${encodeURIComponent(participantId)}/dm_events?max_results=${capped}&dm_event.fields=id,text,created_at,sender_id`,
+      "/2/dm_conversations/with/" +
+        encodeURIComponent(participantId) +
+        "/dm_events?max_results=" +
+        capped +
+        "&event_types=MessageCreate&dm_event.fields=id,text,created_at,sender_id,dm_conversation_id",
       { method: "GET" },
     )
     return (result.data ?? []).map((event) => ({
@@ -455,6 +467,87 @@ export class XClient {
       text: event.text,
       createdAt: event.created_at,
       senderId: event.sender_id,
+      conversationId: event.dm_conversation_id,
     }))
+  }
+
+  async listDmEventsByConversationId(
+    conversationId: string,
+    maxResults = 20,
+  ): Promise<DmEventSummary[]> {
+    const capped = Math.min(Math.max(maxResults, 1), 100)
+    const result = await this.request<{
+      data?: Array<{
+        id: string
+        text?: string
+        created_at?: string
+        sender_id?: string
+        dm_conversation_id?: string
+      }>
+    }>(
+      "/2/dm_conversations/" +
+        encodeURIComponent(conversationId) +
+        "/dm_events?max_results=" +
+        capped +
+        "&event_types=MessageCreate&dm_event.fields=id,text,created_at,sender_id,dm_conversation_id",
+      { method: "GET" },
+    )
+    return (result.data ?? []).map((event) => ({
+      id: event.id,
+      text: event.text,
+      createdAt: event.created_at,
+      senderId: event.sender_id,
+      conversationId: event.dm_conversation_id ?? conversationId,
+    }))
+  }
+
+  async listDmInbox(maxResults = 20): Promise<DmEventSummary[]> {
+    const capped = Math.min(Math.max(maxResults, 1), 100)
+    const result = await this.request<{
+      data?: Array<{
+        id: string
+        text?: string
+        created_at?: string
+        sender_id?: string
+        dm_conversation_id?: string
+      }>
+      includes?: { users?: Array<{ id: string; username: string; name: string }> }
+    }>(
+      "/2/dm_events?max_results=" +
+        capped +
+        "&event_types=MessageCreate&dm_event.fields=id,text,created_at,sender_id,dm_conversation_id&expansions=sender_id&user.fields=id,username,name",
+      { method: "GET" },
+    )
+    const usersById = new Map((result.includes?.users ?? []).map((user) => [user.id, user]))
+    return (result.data ?? []).map((event) => ({
+      id: event.id,
+      text: event.text,
+      createdAt: event.created_at,
+      senderId: event.sender_id,
+      conversationId: event.dm_conversation_id,
+      senderUsername: event.sender_id ? usersById.get(event.sender_id)?.username : undefined,
+    }))
+  }
+
+  async createGroupDmConversation(
+    participantIds: string[],
+    input: CreateDmMessageInput,
+  ): Promise<SentDm> {
+    const result = await this.request<{ data: { dm_event_id: string; dm_conversation_id: string } }>(
+      "/2/dm_conversations",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_type: "Group",
+          participant_ids: participantIds,
+          message: buildDmMessageBody(input),
+        }),
+      },
+    )
+    return {
+      dmEventId: result.data.dm_event_id,
+      dmConversationId: result.data.dm_conversation_id,
+    }
   }
 }

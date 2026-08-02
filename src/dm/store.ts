@@ -62,8 +62,15 @@ export class DmDraftStore {
       createdAt: now,
       updatedAt: now,
     }
+    if (input.conversationType) draft.conversationType = input.conversationType
     if (input.recipientId) draft.recipientId = input.recipientId
     if (input.recipientUsername) draft.recipientUsername = input.recipientUsername.replace(/^@/, "")
+    if (input.participantIds && input.participantIds.length > 0) {
+      draft.participantIds = input.participantIds
+    }
+    if (input.participantUsernames && input.participantUsernames.length > 0) {
+      draft.participantUsernames = input.participantUsernames.map((u) => u.replace(/^@/, ""))
+    }
     if (input.conversationId) draft.conversationId = input.conversationId
     if (input.mediaPaths && input.mediaPaths.length > 0) draft.mediaPaths = input.mediaPaths
     await this.write(draft)
@@ -122,6 +129,7 @@ export class DmDraftStore {
       draft.status === "approved" || draft.status === "rejected" || draft.status === "sending"
 
     if (input.text !== undefined) draft.text = input.text
+    clearOrSet(draft, "conversationType", input.conversationType)
     if (input.recipientId !== undefined) {
       clearOrSet(draft, "recipientId", input.recipientId === null ? undefined : input.recipientId)
     }
@@ -132,6 +140,24 @@ export class DmDraftStore {
         input.recipientUsername === null ? undefined : input.recipientUsername.replace(/^@/, ""),
       )
     }
+    clearOrSet(
+      draft,
+      "participantIds",
+      input.participantIds !== undefined && input.participantIds !== null && input.participantIds.length === 0
+        ? null
+        : input.participantIds,
+    )
+    clearOrSet(
+      draft,
+      "participantUsernames",
+      input.participantUsernames !== undefined &&
+        input.participantUsernames !== null &&
+        input.participantUsernames.length === 0
+        ? null
+        : input.participantUsernames !== undefined && input.participantUsernames !== null
+          ? input.participantUsernames.map((u) => u.replace(/^@/, ""))
+          : input.participantUsernames,
+    )
     clearOrSet(draft, "conversationId", input.conversationId)
     clearOrSet(
       draft,

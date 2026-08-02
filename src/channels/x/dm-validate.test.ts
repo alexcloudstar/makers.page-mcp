@@ -30,4 +30,25 @@ describe("dm-validate", () => {
     )
     expect(result.ok).toBe(false)
   })
+
+  test("accepts group participant ids", async () => {
+    const result = await validateCreateDmDraftInput(
+      { text: "hi all", conversationType: "group", participantIds: ["1", "2"] },
+      100,
+    )
+    expect(result.ok).toBe(true)
+  })
+
+  test("rejects group with only recipient fields", async () => {
+    const result = await validateCreateDmDraftInput(
+      {
+        text: "hi",
+        conversationType: "group",
+        recipientId: "1",
+        participantIds: ["1", "2"],
+      },
+      100,
+    )
+    expect(result.ok).toBe(false)
+  })
 })

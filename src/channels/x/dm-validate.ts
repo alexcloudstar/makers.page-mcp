@@ -1,4 +1,9 @@
-import type { CreateDmDraftInput, DmDraft, UpdateDmDraftInput } from "../../dm/types.js"
+import type {
+  CreateDmDraftInput,
+  DmConversationType,
+  DmDraft,
+  UpdateDmDraftInput,
+} from "../../dm/types.js"
 import { validateMediaPaths } from "./validate.js"
 
 export type ValidationResult = { ok: true } | { ok: false; error: string }
@@ -6,6 +11,15 @@ export type ValidationResult = { ok: true } | { ok: false; error: string }
 export const DEFAULT_MAX_DM_LENGTH = 10_000
 
 const normalizeUsername = (username: string): string => username.replace(/^@/, "").trim()
+
+export const isGroupDraftTarget = (input: {
+  conversationType?: DmConversationType
+  participantIds?: string[]
+  participantUsernames?: string[]
+}): boolean =>
+  input.conversationType === "group" ||
+  (input.participantIds !== undefined && input.participantIds.length >= 2) ||
+  (input.participantUsernames !== undefined && input.participantUsernames.length >= 2)
 
 export const validateDmText = (text: string, maxLength: number): ValidationResult => {
   const trimmed = text.trim()
@@ -15,22 +29,48 @@ export const validateDmText = (text: string, maxLength: number): ValidationResul
   if ([...trimmed].length > maxLength) {
     return {
       ok: false,
-      error: `DM text is ${[...trimmed].length} characters, which exceeds the ${maxLength} character limit.`,
+      error: "DM text is " + [...trimmed].length + " characters, which exceeds the " + maxLength + " character limit.",
     }
   }
   return { ok: true }
 }
 
 export const validateRecipient = (input: {
+  conversationType?: DmConversationType
   recipientId?: string
   recipientUsername?: string
+  participantIds?: string[]
+  participantUsernames?: string[]
   conversationId?: string
 }): ValidationResult => {
+  if (input.conversationId) {
+    return { ok: true }
+  }
+
+  if (isGroupDraftTarget(input)) {
+    const idCount = input.participantIds?.length ?? 0
+    const nameCount = input.participantUsernames?.length ?? 0
+    if (idCount + nameCount < 2) {
+      return {
+        ok: false,
+        error: "Group DMs need at least 2 participantIds or participantUsernames.",
+      }
+    }
+    if (input.recipientId || input.recipientUsername) {
+      return {
+        ok: false,
+        error: "Group drafts use participantIds/participantUsernames, not recipientId/recipientUsername.",
+      }
+    }
+    return { ok: true }
+  }
+
   const hasRecipient = Boolean(input.recipientId || input.recipientUsername)
-  if (!hasRecipient && !input.conversationId) {
+  if (!hasRecipient) {
     return {
       ok: false,
-      error: "Provide recipientId or recipientUsername (or conversationId to reply in an existing thread).",
+      error:
+        "Provide recipientId or recipientUsername (1:1), participantIds/participantUsernames (group), or conversationId (reply).",
     }
   }
   if (input.recipientUsername && normalizeUsername(input.recipientUsername).length === 0) {
@@ -63,6 +103,8 @@ export const validateCreateDmDraftInput = async (
 export const mergeDmDraftFields = (current: DmDraft, update: UpdateDmDraftInput): DmDraft => ({
   ...current,
   text: update.text ?? current.text,
+  conversationType:
+    update.conversationType === null ? undefined : update.conversationType ?? current.conversationType,
   recipientId:
     update.recipientId === null ? undefined : update.recipientId ?? current.recipientId,
   recipientUsername:
@@ -71,6 +113,14 @@ export const mergeDmDraftFields = (current: DmDraft, update: UpdateDmDraftInput)
       : update.recipientUsername
         ? normalizeUsername(update.recipientUsername)
         : current.recipientUsername,
+  participantIds:
+    update.participantIds === null ? undefined : update.participantIds ?? current.participantIds,
+  participantUsernames:
+    update.participantUsernames === null
+      ? undefined
+      : update.participantUsernames
+        ? update.participantUsernames.map(normalizeUsername)
+        : current.participantUsernames,
   conversationId:
     update.conversationId === null ? undefined : update.conversationId ?? current.conversationId,
   mediaPaths:

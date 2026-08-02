@@ -14,6 +14,7 @@ import {
   mergeDmDraftFields,
   validateCreateDmDraftInput,
   validateDmDraft,
+  isGroupDraftTarget,
 } from "../channels/x/dm-validate.js"
 import {
   XApiError,
@@ -72,6 +73,36 @@ const resolveRecipientId = async (
   }
 }
 
+const resolveParticipantIds = async (
+  xClient: Pick<XClient, "getUserByUsername">,
+  draft: DmDraft,
+): Promise<{ participantIds?: string[]; error?: string }> => {
+  const ids = [...(draft.participantIds ?? [])]
+  if (draft.participantUsernames) {
+    for (const username of draft.participantUsernames) {
+      try {
+        const user = await xClient.getUserByUsername(username)
+        if (user.receivesYourDm === false) {
+          return {
+            error: "@" + user.username + " cannot receive DMs from your account (receives_your_dm=false).",
+          }
+        }
+        ids.push(user.id)
+      } catch (error) {
+        if (error instanceof XApiError && error.status === 404) {
+          return { error: "X user @" + username + " was not found." }
+        }
+        throw error
+      }
+    }
+  }
+  const unique = [...new Set(ids)]
+  if (unique.length < 2) {
+    return { error: "Group DMs need at least 2 unique participant ids after resolving usernames." }
+  }
+  return { participantIds: unique }
+}
+
 type DmToolDeps = {
   store?: DmDraftStore
   rateLimiter?: DmRateLimiter
@@ -80,7 +111,10 @@ type DmToolDeps = {
     | "getUserByUsername"
     | "sendDmByParticipantId"
     | "sendDmByConversationId"
+    | "createGroupDmConversation"
     | "listDmEventsByParticipant"
+    | "listDmEventsByConversationId"
+    | "listDmInbox"
     | "uploadMedia"
   >
 }
@@ -161,15 +195,29 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
         "NOT sent until approved and send_dm_draft is called. Supports one optional media attachment.",
       inputSchema: {
         text: z.string().meta({ description: "DM message text." }),
-        recipientId: z.string().optional().meta({ description: "Recipient X user id." }),
+        conversationType: z
+          .enum(["direct", "group"])
+          .optional()
+          .meta({ description: "direct (default) for 1:1, group for new group conversations." }),
+        recipientId: z.string().optional().meta({ description: "1:1 recipient X user id." }),
         recipientUsername: z
           .string()
           .optional()
-          .meta({ description: "Recipient @handle (resolved at send time if id omitted)." }),
+          .meta({ description: "1:1 recipient @handle (resolved at send time if id omitted)." }),
+        participantIds: z
+          .array(z.string())
+          .min(2)
+          .optional()
+          .meta({ description: "Group: 2+ participant user ids (new group only)." }),
+        participantUsernames: z
+          .array(z.string())
+          .min(2)
+          .optional()
+          .meta({ description: "Group: 2+ @handles resolved at send time (new group only)." }),
         conversationId: z
           .string()
           .optional()
-          .meta({ description: "Existing DM conversation id (alternative to recipient fields)." }),
+          .meta({ description: "Existing conversation id (reply in 1:1 or group thread)." }),
         mediaPaths: z
           .array(z.string())
           .min(1)
@@ -178,8 +226,26 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           .meta({ description: "Absolute local path for one media attachment." }),
       },
     },
-    async ({ text, recipientId, recipientUsername, conversationId, mediaPaths }) => {
-      const input = { text, recipientId, recipientUsername, conversationId, mediaPaths }
+    async ({
+      text,
+      conversationType,
+      recipientId,
+      recipientUsername,
+      participantIds,
+      participantUsernames,
+      conversationId,
+      mediaPaths,
+    }) => {
+      const input = {
+        text,
+        conversationType,
+        recipientId,
+        recipientUsername,
+        participantIds,
+        participantUsernames,
+        conversationId,
+        mediaPaths,
+      }
       const validation = await validateCreateDmDraftInput(input, config.maxDmLength)
       if (!validation.ok) return errorResult(validation.error)
 
@@ -237,12 +303,29 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
       inputSchema: {
         id: z.string().meta({ description: "DM draft id." }),
         text: z.string().optional().meta({ description: "New message text." }),
+        conversationType: z
+          .enum(["direct", "group"])
+          .nullable()
+          .optional()
+          .meta({ description: "Conversation type, or null to clear." }),
         recipientId: z.string().nullable().optional().meta({ description: "Recipient user id, or null to clear." }),
         recipientUsername: z
           .string()
           .nullable()
           .optional()
           .meta({ description: "Recipient @handle, or null to clear." }),
+        participantIds: z
+          .array(z.string())
+          .min(2)
+          .nullable()
+          .optional()
+          .meta({ description: "Group participant ids, or null to clear." }),
+        participantUsernames: z
+          .array(z.string())
+          .min(2)
+          .nullable()
+          .optional()
+          .meta({ description: "Group @handles, or null to clear." }),
         conversationId: z
           .string()
           .nullable()
@@ -257,7 +340,17 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           .meta({ description: "One media path, or null to clear." }),
       },
     },
-    async ({ id, text, recipientId, recipientUsername, conversationId, mediaPaths }) =>
+    async ({
+      id,
+      text,
+      conversationType,
+      recipientId,
+      recipientUsername,
+      participantIds,
+      participantUsernames,
+      conversationId,
+      mediaPaths,
+    }) =>
       withDmDraftLock(id, async () => {
         let current: DmDraft
         try {
@@ -277,7 +370,16 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           return errorResult('DM draft "' + id + '" is currently being sent. Wait or reconcile manually.')
         }
 
-        const update = { text, recipientId, recipientUsername, conversationId, mediaPaths }
+        const update = {
+          text,
+          conversationType,
+          recipientId,
+          recipientUsername,
+          participantIds,
+          participantUsernames,
+          conversationId,
+          mediaPaths,
+        }
         const hasUpdate = Object.values(update).some((value) => value !== undefined)
         if (!hasUpdate) {
           return errorResult("update_dm_draft requires at least one field to change.")
@@ -415,8 +517,15 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
           let sent
           let resolvedRecipientId = draft.recipientId
 
-          if (draft.conversationId && !draft.recipientId && !draft.recipientUsername) {
+          if (draft.conversationId) {
             sent = await xClient.sendDmByConversationId(draft.conversationId, messageInput)
+          } else if (isGroupDraftTarget(draft)) {
+            const resolved = await resolveParticipantIds(xClient, draft)
+            if (resolved.error) {
+              await store.revertSending(id, statusBeforeSend)
+              return errorResult(resolved.error)
+            }
+            sent = await xClient.createGroupDmConversation(resolved.participantIds!, messageInput)
           } else {
             const resolved = await resolveRecipientId(xClient, draft)
             if (resolved.error) {
@@ -510,4 +619,71 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
       }
     },
   )
+
+  server.registerTool(
+    "list_dm_inbox",
+    {
+      title: "List DM inbox",
+      description:
+        "Read recent DM events across all conversations (inbox view). Requires dm.read scope.",
+      inputSchema: {
+        maxResults: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .meta({ description: "Max events to return (default 20, max 100)." }),
+      },
+    },
+    async ({ maxResults }) => {
+      try {
+        const events = await xClient.listDmInbox(maxResults ?? 20)
+        if (events.length === 0) return textResult("No DM events in inbox.")
+        return textResult(JSON.stringify(events, null, 2))
+      } catch (error) {
+        if (error instanceof NotAuthenticatedError) return errorResult(error.message)
+        if (error instanceof XApiError) {
+          return errorResult("X API error (" + error.status + "): " + error.message)
+        }
+        throw error
+      }
+    },
+  )
+
+  server.registerTool(
+    "list_dm_conversation_events",
+    {
+      title: "List DM conversation events",
+      description:
+        "Read recent DM events in a conversation by conversationId (works for group and 1:1 threads).",
+      inputSchema: {
+        conversationId: z.string().meta({ description: "DM conversation id." }),
+        maxResults: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .meta({ description: "Max events to return (default 20, max 100)." }),
+      },
+    },
+    async ({ conversationId, maxResults }) => {
+      try {
+        const events = await xClient.listDmEventsByConversationId(conversationId, maxResults ?? 20)
+        if (events.length === 0) return textResult("No DM events found for this conversation.")
+        return textResult(JSON.stringify(events, null, 2))
+      } catch (error) {
+        if (error instanceof NotAuthenticatedError) return errorResult(error.message)
+        if (error instanceof XApiError && error.status === 404) {
+          return errorResult("Conversation not found.")
+        }
+        if (error instanceof XApiError) {
+          return errorResult("X API error (" + error.status + "): " + error.message)
+        }
+        throw error
+      }
+    },
+  )
+
 }

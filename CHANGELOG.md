@@ -9,7 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - X Direct Messages: draft → approve → send flow with local rate limits (`MAKERS_PAGE_DM_MAX_PER_HOUR`, `MAKERS_PAGE_DM_MAX_PER_DAY`, `MAKERS_PAGE_DM_MIN_INTERVAL_MS`).
-- DM tools: `lookup_x_user`, `get_dm_rate_limit`, `create_dm_draft`, `list_dm_drafts`, `get_dm_draft`, `update_dm_draft`, `approve_dm_draft`, `reject_dm_draft`, `send_dm_draft`, `list_dm_events`.
+- DM tools: `lookup_x_user`, `get_dm_rate_limit`, `create_dm_draft`, `list_dm_drafts`, `get_dm_draft`, `update_dm_draft`, `approve_dm_draft`, `reject_dm_draft`, `send_dm_draft`, `list_dm_events`, `list_dm_inbox`, `list_dm_conversation_events`.
+- DM media attachments (one image/GIF/video per draft via existing `uploadMedia`).
+- Group DMs: `conversationType: "group"` with `participantIds` / `participantUsernames`; reply in existing threads via `conversationId`.
 - OAuth scopes `dm.read` and `dm.write` (re-run `makers-page-mcp-auth` after upgrading).
 - Full X manage-posts surface beyond text-only: threads (`parts`), polls, media upload (`mediaPaths` + chunked `/2/media/upload`), quote tweets, community posts (`communityId` / `shareWithFollowers`), and paid partnership.
 - Tools: `edit_published_draft` (root post only; persists the new post id X returns) and `delete_published_draft` (deletes all stored ids, then marks the draft `deleted`).
