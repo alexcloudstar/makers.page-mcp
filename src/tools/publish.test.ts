@@ -86,6 +86,8 @@ afterEach(async () => {
   await rm(draftsDir, { recursive: true, force: true })
 })
 
+const noApprovalConfig = { requireApproval: false, maxPostLength: 280 } as Config
+
 const registerTools = (xClient: FakeXClient, cfg: Config = config, storeOverride?: typeof store) => {
   const server = new StubServer()
   registerPublishTools(server as unknown as never, cfg, {
@@ -539,6 +541,25 @@ describe("publish_draft concurrency", () => {
 })
 
 describe("delete_published_draft", () => {
+  test("requires approval when requireApproval is true", async () => {
+    const draft = await store.create({ channel: "x", text: "hello" })
+    await store.beginPublishing(draft.id)
+    await store.markPublished(draft.id, {
+      externalId: "1",
+      url: "https://x.com/i/web/status/1",
+    })
+
+    const xClient = new FakeXClient(async () => {
+      throw new Error("create should not be called")
+    })
+    const server = registerTools(xClient, { requireApproval: true, maxPostLength: 280 } as Config)
+    const result = await server.call("delete_published_draft", { id: draft.id })
+
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain("MAKERS_PAGE_REQUIRE_APPROVAL")
+    expect(xClient.deleted).toEqual([])
+  })
+
   test("deletes live ids from a publishing draft after partial thread publish", async () => {
     const draft = await store.create({
       channel: "x",
@@ -554,7 +575,7 @@ describe("delete_published_draft", () => {
     const xClient = new FakeXClient(async () => {
       throw new Error("create should not be called")
     })
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("delete_published_draft", { id: draft.id })
 
     expect(result.isError).toBeUndefined()
@@ -583,7 +604,7 @@ describe("delete_published_draft", () => {
     const xClient = new FakeXClient(async () => {
       throw new Error("create should not be called")
     })
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("delete_published_draft", { id })
 
     expect(result.isError).toBeUndefined()
@@ -608,7 +629,7 @@ describe("delete_published_draft", () => {
     const xClient = new FakeXClient(async () => {
       throw new Error("create should not be called")
     })
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("delete_published_draft", { id: draft.id })
 
     expect(result.isError).toBeUndefined()
@@ -647,7 +668,7 @@ describe("delete_published_draft", () => {
         },
       },
     )
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("delete_published_draft", { id: draft.id })
 
     expect(result.isError).toBe(true)
@@ -659,7 +680,7 @@ describe("delete_published_draft", () => {
     const xClient2 = new FakeXClient(async () => {
       throw new Error("create should not be called")
     })
-    const server2 = registerTools(xClient2)
+    const server2 = registerTools(xClient2, noApprovalConfig)
     const retry = await server2.call("delete_published_draft", { id: draft.id })
     expect(retry.isError).toBeUndefined()
     expect(xClient2.deleted).toEqual(["2", "3"])
@@ -686,7 +707,7 @@ describe("delete_published_draft", () => {
         },
       },
     )
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("delete_published_draft", { id: draft.id })
 
     expect(result.isError).toBeUndefined()
@@ -713,7 +734,7 @@ describe("delete_published_draft", () => {
         },
       },
     )
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("delete_published_draft", { id: draft.id })
 
     expect(result.isError).toBe(true)
@@ -741,7 +762,7 @@ describe("delete_published_draft", () => {
     const xClient = new FakeXClient(async () => {
       throw new Error("create should not be called")
     })
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("delete_published_draft", { id: draft.id })
 
     expect(result.isError).toBeUndefined()
@@ -751,6 +772,25 @@ describe("delete_published_draft", () => {
 })
 
 describe("edit_published_draft", () => {
+  test("requires approval when requireApproval is true", async () => {
+    const draft = await store.create({ channel: "x", text: "original" })
+    await store.beginPublishing(draft.id)
+    await store.markPublished(draft.id, {
+      externalId: "10",
+      url: "https://x.com/i/web/status/10",
+    })
+
+    const xClient = new FakeXClient(async () => {
+      throw new Error("create should not be called")
+    })
+    const server = registerTools(xClient, { requireApproval: true, maxPostLength: 280 } as Config)
+    const result = await server.call("edit_published_draft", { id: draft.id, text: "edited" })
+
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toContain("MAKERS_PAGE_REQUIRE_APPROVAL")
+    expect(xClient.calls).toEqual([])
+  })
+
   test("edits the root post and stores the new id", async () => {
     const draft = await store.create({ channel: "x", text: "original" })
     await store.beginPublishing(draft.id)
@@ -764,7 +804,7 @@ describe("edit_published_draft", () => {
       text: input.text,
       url: "https://x.com/i/web/status/11",
     }))
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("edit_published_draft", { id: draft.id, text: "edited" })
 
     expect(result.isError).toBeUndefined()
@@ -799,7 +839,7 @@ describe("edit_published_draft", () => {
       }),
       { uploadMedia: async () => "media-edited" },
     )
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("edit_published_draft", { id: draft.id, text: "edited" })
 
     expect(result.isError).toBeUndefined()
@@ -825,7 +865,7 @@ describe("edit_published_draft", () => {
       text: input.text,
       url: "https://x.com/i/web/status/11",
     }))
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("edit_published_draft", { id: draft.id, text: "edited" })
 
     expect(result.isError).toBeUndefined()
@@ -849,7 +889,7 @@ describe("edit_published_draft", () => {
       text: input.text,
       url: "https://x.com/i/web/status/11",
     }))
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("edit_published_draft", { id: draft.id, text: "edited" })
 
     expect(result.isError).toBeUndefined()
@@ -872,7 +912,7 @@ describe("edit_published_draft", () => {
     const xClient = new FakeXClient(async () => {
       throw new Error("should not be called")
     })
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("edit_published_draft", { id: draft.id, text: "edited" })
 
     expect(result.isError).toBe(true)
@@ -891,7 +931,7 @@ describe("edit_published_draft", () => {
     const xClient = new FakeXClient(async () => {
       throw new TypeError("cannot read properties of undefined")
     })
-    const server = registerTools(xClient)
+    const server = registerTools(xClient, noApprovalConfig)
     const result = await server.call("edit_published_draft", { id: draft.id, text: "edited" })
 
     expect(result.isError).toBe(true)

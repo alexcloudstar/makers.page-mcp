@@ -185,7 +185,7 @@ export class DmDraftStore {
 
   async reject(id: string): Promise<DmDraft> {
     const draft = await this.get(id)
-    if (draft.status === "sent" || draft.status === "deleted") {
+    if (draft.status === "sent" || draft.status === "deleted" || draft.status === "sending") {
       throw new InvalidDmDraftTransitionError(id, draft.status, "rejected")
     }
     if (draft.dmEventId) {
@@ -211,6 +211,14 @@ export class DmDraftStore {
   }
 
   async markSent(
+    id: string,
+    result: { dmEventId: string; dmConversationId: string; recipientId?: string },
+  ): Promise<DmDraft> {
+    return this.recordSentOutcome(id, result)
+  }
+
+  /** Persist a successful X send. Used as a fallback when markSent fails after delivery. */
+  async recordSentOutcome(
     id: string,
     result: { dmEventId: string; dmConversationId: string; recipientId?: string },
   ): Promise<DmDraft> {

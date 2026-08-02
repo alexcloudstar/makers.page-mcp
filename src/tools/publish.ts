@@ -295,6 +295,13 @@ export const registerPublishTools = (server: McpServer, config: Config, deps: Pu
     },
     async ({ id }) =>
       withDraftLock(id, async () => {
+        if (config.requireApproval) {
+          return errorResult(
+            "Deleting live posts requires explicit user approval when MAKERS_PAGE_REQUIRE_APPROVAL is enabled. " +
+              "Set MAKERS_PAGE_REQUIRE_APPROVAL=false or confirm with the user before calling delete_published_draft.",
+          )
+        }
+
         let draft
         try {
           draft = await store.get(id)
@@ -410,6 +417,13 @@ export const registerPublishTools = (server: McpServer, config: Config, deps: Pu
     },
     async ({ id, text, paidPartnership }) =>
       withDraftLock(id, async () => {
+        if (config.requireApproval) {
+          return errorResult(
+            "Editing live posts requires explicit user approval when MAKERS_PAGE_REQUIRE_APPROVAL is enabled. " +
+              "Set MAKERS_PAGE_REQUIRE_APPROVAL=false or confirm with the user before calling edit_published_draft.",
+          )
+        }
+
         let draft
         try {
           draft = await store.get(id)

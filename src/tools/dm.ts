@@ -425,7 +425,8 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
     "reject_dm_draft",
     {
       title: "Reject DM draft",
-      description: "Mark a DM draft rejected. Also usable to reconcile a draft stuck in sending after a failed attempt.",
+      description:
+        "Mark a DM draft rejected. Cannot reject drafts in sending — verify on X first; if already sent, leave the draft as-is.",
       inputSchema: { id: z.string().meta({ description: "DM draft id." }) },
     },
     async ({ id }) =>
@@ -565,18 +566,40 @@ export const registerDmTools = (server: McpServer, config: Config, deps: DmToolD
                 '" could not be updated:',
               error,
             )
-            return textResult(
-              "DM sent.\n" +
-                "event id: " +
-                sent.dmEventId +
-                "\n" +
-                "conversation id: " +
-                sent.dmConversationId +
-                "\n\n" +
-                "WARNING: the DM is live, but updating the local draft record failed. " +
-                "Verify manually and do not retry send_dm_draft for this draft. Error: " +
-                (error instanceof Error ? error.message : String(error)),
-            )
+            try {
+              const recovered = await store.recordSentOutcome(id, {
+                dmEventId: sent.dmEventId,
+                dmConversationId: sent.dmConversationId,
+                recipientId: resolvedRecipientId,
+              })
+              return textResult(
+                "DM sent.\n" +
+                  "event id: " +
+                  sent.dmEventId +
+                  "\n" +
+                  "conversation id: " +
+                  sent.dmConversationId +
+                  "\n\n" +
+                  formatDmDraft(recovered),
+              )
+            } catch (persistError) {
+              console.error(
+                'DM event "' + sent.dmEventId + '" could not be persisted for draft "' + id + '":',
+                persistError,
+              )
+              return textResult(
+                "DM sent.\n" +
+                  "event id: " +
+                  sent.dmEventId +
+                  "\n" +
+                  "conversation id: " +
+                  sent.dmConversationId +
+                  "\n\n" +
+                  "WARNING: the DM is live, but updating the local draft record failed. " +
+                  "Verify manually and do not retry send_dm_draft for this draft. Error: " +
+                  (persistError instanceof Error ? persistError.message : String(persistError)),
+              )
+            }
           }
         } catch (error) {
           if (error instanceof NotAuthenticatedError || error instanceof XApiError) {
