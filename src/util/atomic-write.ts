@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto"
 import { rename, unlink, writeFile } from "node:fs/promises"
 
+/** Owner-read/write only. Used for credentials, drafts, and other local sensitive data. */
+export const PRIVATE_FILE_MODE = 0o600
+
 /**
  * Writes to a temp file in the same directory and renames it into place.
  * `rename` is atomic on POSIX filesystems, so readers never observe a

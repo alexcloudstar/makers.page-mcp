@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import {
@@ -188,7 +188,10 @@ describe("validateXDraft", () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "validate-media-"))
     try {
       const filePath = path.join(dir, "pic.png")
-      await writeFile(filePath, Buffer.alloc(8, 1))
+      await writeFile(
+        filePath,
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]),
+      )
       const result = await validateXDraft(
         {
           text: "hello",
@@ -207,8 +210,11 @@ describe("validateXDraft", () => {
     try {
       const png = path.join(dir, "pic.png")
       const gif = path.join(dir, "anim.gif")
-      await writeFile(png, Buffer.alloc(8, 1))
-      await writeFile(gif, Buffer.alloc(8, 1))
+      await writeFile(
+        png,
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]),
+      )
+      await writeFile(gif, Buffer.from("GIF89a", "ascii"))
       const result = await validateXDraft(
         {
           text: "hello",
@@ -228,8 +234,10 @@ describe("validateXDraft", () => {
     try {
       const a = path.join(dir, "a.mp4")
       const b = path.join(dir, "b.mp4")
-      await writeFile(a, Buffer.alloc(8, 1))
-      await writeFile(b, Buffer.alloc(8, 1))
+      const mp4Header = Buffer.alloc(8)
+      mp4Header.write("ftyp", 4, "ascii")
+      await writeFile(a, mp4Header)
+      await writeFile(b, mp4Header)
       const result = await validateXDraft(
         {
           text: "hello",
@@ -258,6 +266,49 @@ describe("validateXDraft", () => {
       )
       expect(result.ok).toBe(false)
       if (!result.ok) expect(result.error).toContain("empty")
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects symbolic links", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "validate-symlink-"))
+    try {
+      const target = path.join(dir, "real.png")
+      const link = path.join(dir, "link.png")
+      await writeFile(
+        target,
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]),
+      )
+      await symlink(target, link)
+      const result = await validateXDraft(
+        {
+          text: "hello",
+          mediaPaths: [link],
+        },
+        280,
+      )
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toContain("symbolic link")
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("rejects files whose contents do not match the extension", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "validate-magic-"))
+    try {
+      const filePath = path.join(dir, "fake.png")
+      await writeFile(filePath, Buffer.from("not-a-png-file", "utf8"))
+      const result = await validateXDraft(
+        {
+          text: "hello",
+          mediaPaths: [filePath],
+        },
+        280,
+      )
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toContain("content sniffing")
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

@@ -1,4 +1,4 @@
-import { access, stat } from "node:fs/promises"
+import { access, lstat, open } from "node:fs/promises"
 import path from "node:path"
 import type { CreateDraftInput, Draft, DraftPoll, UpdateDraftInput } from "../../drafts/types.js"
 
@@ -103,6 +103,67 @@ const EXT_TO_MIME: Record<string, string> = {
   ".mp4": "video/mp4",
 }
 
+const matchesMagicBytes = (ext: string, header: Buffer): boolean => {
+  switch (ext) {
+    case ".jpg":
+    case ".jpeg":
+      return header.length >= 3 && header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff
+    case ".png":
+      return (
+        header.length >= 8 &&
+        header[0] === 0x89 &&
+        header[1] === 0x50 &&
+        header[2] === 0x4e &&
+        header[3] === 0x47 &&
+        header[4] === 0x0d &&
+        header[5] === 0x0a &&
+        header[6] === 0x1a &&
+        header[7] === 0x0a
+      )
+    case ".gif":
+      return (
+        header.length >= 6 &&
+        (header.subarray(0, 6).equals(Buffer.from("GIF87a")) ||
+          header.subarray(0, 6).equals(Buffer.from("GIF89a")))
+      )
+    case ".webp":
+      return (
+        header.length >= 12 &&
+        header.subarray(0, 4).equals(Buffer.from("RIFF")) &&
+        header.subarray(8, 12).equals(Buffer.from("WEBP"))
+      )
+    case ".mp4":
+      return header.length >= 8 && header.subarray(4, 8).equals(Buffer.from("ftyp"))
+    default:
+      return false
+  }
+}
+
+const verifyMediaMagicBytes = async (filePath: string, ext: string): Promise<ValidationResult> => {
+  const handle = await open(filePath, "r")
+  try {
+    const header = Buffer.alloc(12)
+    const { bytesRead } = await handle.read(header, 0, header.length, 0)
+    if (bytesRead === 0 || !matchesMagicBytes(ext, header.subarray(0, bytesRead))) {
+      return {
+        ok: false,
+        error:
+          `Media file "${filePath}" does not match the expected ${ext} format ` +
+          "(content sniffing failed).",
+      }
+    }
+    return { ok: true }
+  } finally {
+    await handle.close()
+  }
+}
+
+/** Re-check symlink and magic bytes immediately before reading a file for upload. */
+export const assertSafeMediaFileForUpload = async (filePath: string): Promise<void> => {
+  const validation = await validateMediaPaths([filePath])
+  if (!validation.ok) throw new Error(validation.error)
+}
+
 export const resolveMediaCategory = (
   filePath: string,
 ): { ok: true; category: MediaCategory; mimeType: string } | { ok: false; error: string } => {
@@ -168,23 +229,34 @@ export const validateMediaPaths = async (mediaPaths: string[]): Promise<Validati
       return { ok: false, error: `Media file does not exist: "${filePath}".` }
     }
 
-    const info = await stat(filePath)
-    if (!info.isFile()) {
+    let fileInfo
+    try {
+      fileInfo = await lstat(filePath)
+    } catch {
+      return { ok: false, error: `Media file does not exist: "${filePath}".` }
+    }
+    if (fileInfo.isSymbolicLink()) {
+      return { ok: false, error: `Media path must not be a symbolic link: "${filePath}".` }
+    }
+    if (!fileInfo.isFile()) {
       return { ok: false, error: `Media path is not a file: "${filePath}".` }
     }
-    if (info.size === 0) {
+    if (fileInfo.size === 0) {
       return { ok: false, error: `Media file is empty: "${filePath}".` }
     }
 
     const limit = MEDIA_LIMITS[resolved.category]
-    if (info.size > limit.maxBytes) {
+    if (fileInfo.size > limit.maxBytes) {
       return {
         ok: false,
         error:
-          `Media file "${filePath}" is ${info.size} bytes, which exceeds the ` +
+          `Media file "${filePath}" is ${fileInfo.size} bytes, which exceeds the ` +
           `${limit.maxBytes} byte limit for ${resolved.category}.`,
       }
     }
+
+    const magicValidation = await verifyMediaMagicBytes(filePath, path.extname(filePath).toLowerCase())
+    if (!magicValidation.ok) return magicValidation
   }
 
   const gifCount = categories.filter((c) => c === "tweet_gif").length

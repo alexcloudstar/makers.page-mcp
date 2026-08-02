@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Local data files (post drafts, DM drafts, retweet drafts, DM rate-limit state) are now written with `0600` permissions, matching credential storage.
+- OAuth callback server only listens on loopback (`127.0.0.1` / `::1`); non-loopback `X_REDIRECT_URI` values are rejected.
+- Media validation rejects symbolic links and verifies file magic bytes match the declared extension before upload.
+- OAuth token exchange/refresh failures no longer include raw API response bodies in error messages.
 - `create_draft` / `update_draft` accept the extended X fields; `poll`, `mediaPaths`, and `quoteTweetId` are mutually exclusive.
 - `publish_draft` uploads media, posts thread replies to the previous part, and on mid-thread failure records posted ids while leaving status `publishing` (no auto-retry).
 - X media upload migrated to current v2 endpoints (simple upload for images; `/initialize` → `/append` → `/finalize` for GIF/video).

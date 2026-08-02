@@ -5,7 +5,7 @@ import { CredentialStore } from "../../auth/store.js"
 import { NotAuthenticatedError } from "../../auth/errors.js"
 import type { Config } from "../../config.js"
 import { fetchWithTimeout } from "../../util/fetch-with-timeout.js"
-import { resolveMediaCategory, type MediaCategory } from "./validate.js"
+import { assertSafeMediaFileForUpload, resolveMediaCategory, type MediaCategory } from "./validate.js"
 import type { XTweetWithMetrics, XTweetAnalytics, XWindowMetrics } from "./analytics.js"
 
 export { NotAuthenticatedError }
@@ -487,6 +487,8 @@ export class XClient {
   }
 
   async uploadMedia(filePath: string): Promise<string> {
+    await assertSafeMediaFileForUpload(filePath)
+
     const resolved = resolveMediaCategory(filePath)
     if (!resolved.ok) {
       throw new Error(resolved.error)

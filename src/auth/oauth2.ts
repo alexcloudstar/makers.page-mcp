@@ -52,6 +52,32 @@ const toCredentials = (token: TokenResponse): Credentials => ({
 const basicAuthHeader = (clientId: string, clientSecret?: string): string | undefined =>
   clientSecret ? `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}` : undefined
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"])
+
+const formatTokenExchangeError = (action: "exchange authorization code" | "refresh access token", status: number): string =>
+  `Failed to ${action} (HTTP ${status}). Verify X_CLIENT_ID, X_CLIENT_SECRET (if confidential), and X_REDIRECT_URI.`
+
+/** OAuth callback must stay on loopback so the local auth server is not exposed on the network. */
+export const resolveOAuthCallbackListenTarget = (
+  redirectUri: string,
+): { host: string; port: number; pathname: string } => {
+  const url = new URL(redirectUri)
+  const hostname = url.hostname.toLowerCase()
+  if (!LOOPBACK_HOSTS.has(hostname)) {
+    throw new Error(
+      `X_REDIRECT_URI must use a loopback host (127.0.0.1, localhost, or ::1), got "${url.hostname}".`,
+    )
+  }
+
+  const host = hostname === "::1" || hostname === "[::1]" ? "::1" : "127.0.0.1"
+  const port = Number(url.port || (url.protocol === "https:" ? 443 : 80))
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`X_REDIRECT_URI has an invalid port: "${url.port || "(default)"}".`)
+  }
+
+  return { host, port, pathname: url.pathname }
+}
+
 const exchangeCodeForToken = async (
   config: Config,
   code: string,
@@ -77,8 +103,7 @@ const exchangeCodeForToken = async (
   })
 
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`Failed to exchange code for token (${response.status}): ${text}`)
+    throw new Error(formatTokenExchangeError("exchange authorization code", response.status))
   }
 
   const token = (await response.json()) as TokenResponse
@@ -104,8 +129,7 @@ const refreshAccessToken = async (config: Config, refreshToken: string): Promise
   })
 
   if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`Failed to refresh access token (${response.status}): ${text}`)
+    throw new Error(formatTokenExchangeError("refresh access token", response.status))
   }
 
   const token = (await response.json()) as TokenResponse
@@ -133,7 +157,8 @@ export const runAuthorizationCodeFlow = async (
   const clientId = requireClientId(config)
   const { codeVerifier, codeChallenge } = createPkcePair()
   const state = base64Url(randomBytes(16))
-  const redirectUrl = new URL(config.x.redirectUri)
+  const { host: listenHost, port: listenPort, pathname: callbackPathname } =
+    resolveOAuthCallbackListenTarget(config.x.redirectUri)
 
   const code = await new Promise<string>((resolve, reject) => {
     let settled = false
@@ -146,7 +171,7 @@ export const runAuthorizationCodeFlow = async (
 
     const server = http.createServer((req, res) => {
       const url = new URL(req.url ?? "/", `http://${req.headers.host}`)
-      if (url.pathname !== redirectUrl.pathname) {
+      if (url.pathname !== callbackPathname) {
         res.writeHead(404).end()
         return
       }
@@ -180,7 +205,7 @@ export const runAuthorizationCodeFlow = async (
     }, AUTHORIZATION_TIMEOUT_MS)
     timeoutTimer.unref()
 
-    server.listen(Number(redirectUrl.port || 80), redirectUrl.hostname, () => {
+    server.listen(listenPort, listenHost, () => {
       const authorizeUrl = new URL(AUTHORIZE_URL)
       authorizeUrl.searchParams.set("response_type", "code")
       authorizeUrl.searchParams.set("client_id", clientId)

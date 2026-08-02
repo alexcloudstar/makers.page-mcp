@@ -12,6 +12,7 @@ import {
   type CreatedTweet,
 } from "../channels/x/client.js"
 import { NetworkError } from "../util/fetch-with-timeout.js"
+import { MINIMAL_PNG } from "../test-helpers/media-fixtures.js"
 import { registerPublishTools } from "./publish.js"
 
 // A minimal stand-in for McpServer: just enough for registerTool to capture
@@ -167,7 +168,7 @@ describe("publish_draft error handling", () => {
 
   test("an unexpected error during media upload (before createTweet) still reverts", async () => {
     const mediaPath = path.join(draftsDir, "pic.png")
-    await writeFile(mediaPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    await writeFile(mediaPath, MINIMAL_PNG)
     const draft = await store.create({
       channel: "x",
       text: "hello",
@@ -301,7 +302,7 @@ describe("publish_draft happy path", () => {
 
   test("uploads media before creating the tweet", async () => {
     const mediaPath = path.join(draftsDir, "pic.png")
-    await writeFile(mediaPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    await writeFile(mediaPath, MINIMAL_PNG)
     const draft = await store.create({
       channel: "x",
       text: "with media",
@@ -328,7 +329,7 @@ describe("publish_draft happy path", () => {
 
   test("network error during media upload (before any tweet) reverts the draft", async () => {
     const mediaPath = path.join(draftsDir, "pic.png")
-    await writeFile(mediaPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    await writeFile(mediaPath, MINIMAL_PNG)
     const draft = await store.create({
       channel: "x",
       text: "with media",
@@ -360,7 +361,7 @@ describe("publish_draft happy path", () => {
 
   test("refuses to publish when media file disappeared since draft creation", async () => {
     const mediaPath = path.join(draftsDir, "missing.png")
-    await writeFile(mediaPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    await writeFile(mediaPath, MINIMAL_PNG)
     const draft = await store.create({
       channel: "x",
       text: "with media",
@@ -779,7 +780,7 @@ describe("edit_published_draft", () => {
 
   test("re-uploads media on edit so attachments are not stripped", async () => {
     const mediaPath = path.join(draftsDir, "pic.png")
-    await writeFile(mediaPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    await writeFile(mediaPath, MINIMAL_PNG)
     const draft = await store.create({
       channel: "x",
       text: "original",
