@@ -6,6 +6,7 @@ import { NotAuthenticatedError } from "../../auth/errors.js"
 import type { Config } from "../../config.js"
 import { fetchWithTimeout } from "../../util/fetch-with-timeout.js"
 import { resolveMediaCategory, type MediaCategory } from "./validate.js"
+import type { XTweetWithMetrics, XTweetAnalytics, XWindowMetrics } from "./analytics.js"
 
 export { NotAuthenticatedError }
 
@@ -77,6 +78,65 @@ export type DmEventSummary = {
   conversationId?: string
   senderUsername?: string
 }
+
+type ApiPublicMetrics = {
+  impression_count?: number
+  like_count?: number
+  reply_count?: number
+  retweet_count?: number
+  quote_count?: number
+  bookmark_count?: number
+}
+
+type ApiTweetWithMetrics = {
+  id: string
+  text?: string
+  created_at?: string
+  public_metrics?: ApiPublicMetrics
+}
+
+const parsePublicMetrics = (metrics: ApiPublicMetrics | undefined) => ({
+  impressionCount: metrics?.impression_count ?? 0,
+  likeCount: metrics?.like_count ?? 0,
+  replyCount: metrics?.reply_count ?? 0,
+  repostCount: metrics?.retweet_count ?? 0,
+  quoteCount: metrics?.quote_count ?? 0,
+  bookmarkCount: metrics?.bookmark_count ?? 0,
+})
+
+const parseTweetWithMetrics = (tweet: ApiTweetWithMetrics): XTweetWithMetrics | undefined => {
+  if (!tweet.created_at || tweet.text === undefined) return undefined
+  return {
+    id: tweet.id,
+    text: tweet.text,
+    createdAt: tweet.created_at,
+    url: tweetUrl(tweet.id),
+    metrics: parsePublicMetrics(tweet.public_metrics),
+  }
+}
+
+type ApiAnalyticsMetrics = {
+  impressions?: number
+  likes?: number
+  retweets?: number
+  replies?: number
+  quote_tweets?: number
+  engagements?: number
+}
+
+const parseApiAnalyticsMetrics = (metrics: ApiAnalyticsMetrics | undefined): XWindowMetrics => ({
+  impressions: metrics?.impressions ?? 0,
+  likes: metrics?.likes ?? 0,
+  reposts: metrics?.retweets ?? 0,
+  replies: metrics?.replies ?? 0,
+  quotes: metrics?.quote_tweets ?? 0,
+  engagements: metrics?.engagements ?? 0,
+})
+
+/** X analytics API rejects millisecond precision on start_time/end_time. */
+const formatAnalyticsTime = (iso: string): string => iso.replace(/\.\d{3}Z$/, "Z")
+
+const TWEET_METRICS_FIELDS = "tweet.fields=created_at,text,public_metrics"
 
 const buildDmMessageBody = (input: CreateDmMessageInput): Record<string, unknown> => {
   const body: Record<string, unknown> = { text: input.text }
@@ -375,6 +435,40 @@ export class XClient {
     }
   }
 
+  async retweet(tweetId: string): Promise<void> {
+    const me = await this.getMe()
+    const result = await this.request<{ data?: { retweeted?: boolean } }>(
+      `/2/users/${me.id}/retweets`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tweet_id: tweetId }),
+      },
+    )
+    if (result?.data?.retweeted !== true) {
+      throw new XApiError(
+        `X API retweet did not confirm success for tweet id ${tweetId}`,
+        422,
+        result,
+      )
+    }
+  }
+
+  async undoRetweet(tweetId: string): Promise<void> {
+    const me = await this.getMe()
+    const result = await this.request<{ data?: { retweeted?: boolean } }>(
+      `/2/users/${me.id}/retweets/${tweetId}`,
+      { method: "DELETE" },
+    )
+    if (result?.data?.retweeted !== false) {
+      throw new XApiError(
+        `X API undo retweet did not confirm success for tweet id ${tweetId}`,
+        422,
+        result,
+      )
+    }
+  }
+
   async getUserByUsername(
     username: string,
   ): Promise<XUser & { receivesYourDm?: boolean }> {
@@ -549,5 +643,111 @@ export class XClient {
       dmEventId: result.data.dm_event_id,
       dmConversationId: result.data.dm_conversation_id,
     }
+  }
+
+  async getTweetsByIds(ids: string[]): Promise<XTweetWithMetrics[]> {
+    if (ids.length === 0) return []
+    const unique = [...new Set(ids)].slice(0, 100)
+    const result = await this.request<{ data?: ApiTweetWithMetrics[] }>(
+      `/2/tweets?ids=${unique.map(encodeURIComponent).join(",")}&${TWEET_METRICS_FIELDS}`,
+      { method: "GET" },
+    )
+    return (result.data ?? [])
+      .map(parseTweetWithMetrics)
+      .filter((tweet): tweet is XTweetWithMetrics => tweet !== undefined)
+  }
+
+  async listUserTweets(
+    userId: string,
+    options: {
+      maxResults?: number
+      startTime?: string
+      endTime?: string
+      paginationToken?: string
+    } = {},
+  ): Promise<{ tweets: XTweetWithMetrics[]; nextToken?: string }> {
+    const maxResults = Math.min(Math.max(options.maxResults ?? 20, 5), 100)
+    const query = new URLSearchParams()
+    query.set("max_results", String(maxResults))
+    query.set("tweet.fields", "created_at,text,public_metrics")
+    if (options.startTime) query.set("start_time", options.startTime)
+    if (options.endTime) query.set("end_time", options.endTime)
+    if (options.paginationToken) query.set("pagination_token", options.paginationToken)
+
+    const result = await this.request<{
+      data?: ApiTweetWithMetrics[]
+      meta?: { next_token?: string }
+    }>(`/2/users/${encodeURIComponent(userId)}/tweets?${query.toString()}`, { method: "GET" })
+
+    const tweets = (result.data ?? [])
+      .map(parseTweetWithMetrics)
+      .filter((tweet): tweet is XTweetWithMetrics => tweet !== undefined)
+
+    return { tweets, nextToken: result.meta?.next_token }
+  }
+
+  async listUserTweetsInRange(
+    userId: string,
+    startTime: string,
+    endTime: string,
+    maxPosts = 100,
+  ): Promise<XTweetWithMetrics[]> {
+    const collected: XTweetWithMetrics[] = []
+    let paginationToken: string | undefined
+
+    while (collected.length < maxPosts) {
+      const pageSize = Math.min(100, maxPosts - collected.length)
+      const page = await this.listUserTweets(userId, {
+        maxResults: pageSize,
+        startTime,
+        endTime,
+        paginationToken,
+      })
+      collected.push(...page.tweets)
+      if (!page.nextToken || page.tweets.length === 0) break
+      paginationToken = page.nextToken
+    }
+
+    return collected.slice(0, maxPosts)
+  }
+
+  async getPostsAnalytics(
+    ids: string[],
+    startTime: string,
+    endTime: string,
+    granularity: "hourly" | "daily" | "weekly" | "total" = "total",
+  ): Promise<XTweetAnalytics[]> {
+    if (ids.length === 0) return []
+
+    const unique = [...new Set(ids)]
+    const results: XTweetAnalytics[] = []
+
+    for (let i = 0; i < unique.length; i += 100) {
+      const batch = unique.slice(i, i + 100)
+      const query = new URLSearchParams()
+      query.set("ids", batch.join(","))
+      query.set("start_time", formatAnalyticsTime(startTime))
+      query.set("end_time", formatAnalyticsTime(endTime))
+      query.set("granularity", granularity)
+
+      const result = await this.request<{
+        data?: Array<{
+          id: string
+          timestamped_metrics?: Array<{ timestamp?: string; metrics?: ApiAnalyticsMetrics }>
+        }>
+      }>(`/2/tweets/analytics?${query.toString()}`, { method: "GET" })
+
+      for (const row of result.data ?? []) {
+        results.push({
+          id: row.id,
+          timestampedMetrics: (row.timestamped_metrics ?? []).map((entry) => ({
+            timestamp: entry.timestamp ?? "",
+            metrics: parseApiAnalyticsMetrics(entry.metrics),
+          })),
+        })
+      }
+    }
+
+    return results
   }
 }

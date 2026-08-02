@@ -20,6 +20,7 @@ export type Config = {
   dataDir: string
   draftsDir: string
   dmDraftsDir: string
+  retweetDraftsDir: string
   credentialsPath: string
   requireApproval: boolean
   maxPostLength: number
@@ -86,6 +87,7 @@ export const loadConfig = (): Config => {
     dataDir,
     draftsDir: path.join(dataDir, "drafts"),
     dmDraftsDir: path.join(dataDir, "dm-drafts"),
+    retweetDraftsDir: path.join(dataDir, "retweet-drafts"),
     credentialsPath: path.join(configDir, "credentials.json"),
     requireApproval: process.env.MAKERS_PAGE_REQUIRE_APPROVAL !== "false",
     maxPostLength: resolveMaxPostLength(),

@@ -214,8 +214,19 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 | `list_dm_events` | Read recent events in a 1:1 DM thread (`participantId` or `username`). |
 | `list_dm_inbox` | Read recent DM events across all conversations (inbox view for agent context). |
 | `list_dm_conversation_events` | Read recent events in a conversation by `conversationId` (1:1 or group thread). |
-
+| `get_x_post_metrics` | Fetch impressions, likes, reposts, replies, quotes, and bookmarks for up to 100 post ids. |
+| `get_x_account_summary` | Calendar-day impressions and engagements via `GET /2/tweets/analytics` (aligned with x.com account analytics). Period totals and top posts for the window. |
+| `analyze_x_posting_times` | Hour-of-day analysis: avg impressions and engagement rate by when you posted. |
+| `create_retweet_draft` | Save a draft retweet or undo-retweet for a post id. Not executed until approved. |
+| `list_retweet_drafts` | List retweet/undo drafts, optionally filtered by status. |
+| `get_retweet_draft` | Fetch a single retweet/undo draft by id. |
+| `approve_retweet_draft` | Mark a retweet/undo draft approved (required before execution unless approvals disabled). |
+| `reject_retweet_draft` | Mark a retweet/undo draft rejected; also reconcile drafts stuck in executing. |
+| `retweet_post` | Retweet an approved draft immediately via `POST /2/users/:id/retweets`. |
+| `undo_retweet` | Undo an approved retweet draft via `DELETE /2/users/:id/retweets/:tweet_id`. |
 Typical agent flow: `create_draft` → show the user the draft → user says "approve" → `approve_draft` → `publish_draft`.
+
+Typical retweet flow: `create_retweet_draft` → user approves → `approve_retweet_draft` → `retweet_post` (or `undo_retweet` for undo drafts).
 
 Typical DM flow: `lookup_x_user` (optional) → `create_dm_draft` → user approves → `approve_dm_draft` → `send_dm_draft`.
 
@@ -281,6 +292,8 @@ Destination: **one local indie stack MCP** that already knows the founder tools 
 
 - X manage-posts: text, threads, polls, media (chunked upload), quote, community + `share_with_followers`, paid partnership, edit, and delete — still behind draft → approve → publish with crash-safe / no-auto-retry semantics.
 - X DMs: draft → approve → send (1:1 text, media attachment, group conversations) with local rate limits; read inbox and thread events; `@handle` lookup.
+- X analytics (read-only): post metrics, account summary (today + top posts), posting-time analysis. No local DB; fetches from X API on demand.
+- X retweets: draft → approve → `retweet_post` / `undo_retweet` (immediate; no scheduling).
 
 **Next**
 

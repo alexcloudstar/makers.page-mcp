@@ -16,6 +16,7 @@ const config = {
   dataDir: "/tmp/makers-page-mcp-test-data",
   draftsDir: "/tmp/makers-page-mcp-test-drafts",
   dmDraftsDir: "/tmp/makers-page-mcp-test-dm-drafts",
+  retweetDraftsDir: "/tmp/makers-page-mcp-test-retweet-drafts",
   credentialsPath: "/tmp/makers-page-mcp-test-config/credentials.json",
   requireApproval: true,
   maxPostLength: 280,
@@ -281,5 +282,42 @@ describe("XClient.uploadMedia", () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe("XClient retweets", () => {
+  test("retweet posts to /2/users/:id/retweets", async () => {
+    let capturedUrl = ""
+    let capturedBody: Record<string, unknown> | undefined
+    globalThis.fetch = (async (input, init) => {
+      capturedUrl = String(input)
+      if (capturedUrl.endsWith("/2/users/me")) {
+        return new Response(JSON.stringify({ data: { id: "me-1", username: "u" } }), { status: 200 })
+      }
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return new Response(JSON.stringify({ data: { retweeted: true } }), { status: 200 })
+    }) as typeof fetch
+
+    const client = withMockedAuth(new XClient(config))
+    await client.retweet("555")
+
+    expect(capturedUrl).toContain("/2/users/me-1/retweets")
+    expect(capturedBody).toEqual({ tweet_id: "555" })
+  })
+
+  test("undoRetweet deletes /2/users/:id/retweets/:tweet_id", async () => {
+    let capturedUrl = ""
+    globalThis.fetch = (async (input) => {
+      capturedUrl = String(input)
+      if (capturedUrl.endsWith("/2/users/me")) {
+        return new Response(JSON.stringify({ data: { id: "me-1", username: "u" } }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ data: { retweeted: false } }), { status: 200 })
+    }) as typeof fetch
+
+    const client = withMockedAuth(new XClient(config))
+    await client.undoRetweet("555")
+
+    expect(capturedUrl).toContain("/2/users/me-1/retweets/555")
   })
 })

@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - DM tools: `lookup_x_user`, `get_dm_rate_limit`, `create_dm_draft`, `list_dm_drafts`, `get_dm_draft`, `update_dm_draft`, `approve_dm_draft`, `reject_dm_draft`, `send_dm_draft`, `list_dm_events`, `list_dm_inbox`, `list_dm_conversation_events`.
 - DM media attachments (one image/GIF/video per draft via existing `uploadMedia`).
 - Group DMs: `conversationType: "group"` with `participantIds` / `participantUsernames`; reply in existing threads via `conversationId`.
+- X analytics tools (read-only, no DB): `get_x_post_metrics`, `get_x_account_summary` (uses `GET /2/tweets/analytics` for calendar-day impressions), `analyze_x_posting_times`.
+- X retweet tools: `create_retweet_draft`, `approve_retweet_draft`, `retweet_post`, `undo_retweet` (draft → approve → execute; uses `POST/DELETE /2/users/:id/retweets`).
 - OAuth scopes `dm.read` and `dm.write` (re-run `makers-page-mcp-auth` after upgrading).
 - Full X manage-posts surface beyond text-only: threads (`parts`), polls, media upload (`mediaPaths` + chunked `/2/media/upload`), quote tweets, community posts (`communityId` / `shareWithFollowers`), and paid partnership.
 - Tools: `edit_published_draft` (root post only; persists the new post id X returns) and `delete_published_draft` (deletes all stored ids, then marks the draft `deleted`).
