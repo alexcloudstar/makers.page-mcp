@@ -31,6 +31,53 @@ const formatExecuteError = (error: unknown): string => {
   return error instanceof Error ? error.message : String(error)
 }
 
+const retweetDraftExecuteBlockedReason = (
+  id: string,
+  draft: RetweetDraft,
+  expectedAction: RetweetAction,
+  requireApproval: boolean,
+): string | undefined => {
+  if (draft.action !== expectedAction) {
+    return (
+      `Retweet draft "${id}" is action "${draft.action}", not "${expectedAction}". ` +
+      (expectedAction === "retweet"
+        ? "Use undo_retweet for undo drafts."
+        : "Use retweet_post for retweet drafts.")
+    )
+  }
+  if (draft.status === "completed") {
+    return `Retweet draft "${id}" was already completed at ${draft.executedAt ?? "unknown time"}.`
+  }
+  if (draft.status === "deleted") {
+    return `Retweet draft "${id}" was deleted and cannot be executed.`
+  }
+  if (draft.status === "executing") {
+    return (
+      `Retweet draft "${id}" is already executing (or a previous attempt was interrupted). ` +
+      "Check X manually before retrying."
+    )
+  }
+  if (draft.status !== "approved" && requireApproval) {
+    return `Retweet draft "${id}" has status "${draft.status}". Approve it with approve_retweet_draft first.`
+  }
+  return undefined
+}
+
+const runRetweetAction = async (
+  xClient: Pick<XClient, "retweet" | "undoRetweet">,
+  action: RetweetAction,
+  tweetId: string,
+): Promise<void> => {
+  if (action === "retweet") {
+    await xClient.retweet(tweetId)
+    return
+  }
+  await xClient.undoRetweet(tweetId)
+}
+
+const retweetActionVerb = (action: RetweetAction): string =>
+  action === "retweet" ? "Retweeted" : "Undo retweet completed for"
+
 type RetweetToolDeps = {
   store?: RetweetDraftStore
   xClient?: Pick<XClient, "retweet" | "undoRetweet">
@@ -53,46 +100,21 @@ const executeRetweetDraft = async (
       throw error
     }
 
-    if (draft.action !== expectedAction) {
-      return errorResult(
-        `Retweet draft "${id}" is action "${draft.action}", not "${expectedAction}". ` +
-          (expectedAction === "retweet"
-            ? "Use undo_retweet for undo drafts."
-            : "Use retweet_post for retweet drafts."),
-      )
-    }
-
-    if (draft.status === "completed") {
-      return errorResult(
-        `Retweet draft "${id}" was already completed at ${draft.executedAt ?? "unknown time"}.`,
-      )
-    }
-    if (draft.status === "deleted") {
-      return errorResult(`Retweet draft "${id}" was deleted and cannot be executed.`)
-    }
-    if (draft.status === "executing") {
-      return errorResult(
-        `Retweet draft "${id}" is already executing (or a previous attempt was interrupted). ` +
-          "Check X manually before retrying.",
-      )
-    }
-    if (draft.status !== "approved" && config.requireApproval) {
-      return errorResult(
-        `Retweet draft "${id}" has status "${draft.status}". Approve it with approve_retweet_draft first.`,
-      )
-    }
+    const executeBlockedReason = retweetDraftExecuteBlockedReason(
+      id,
+      draft,
+      expectedAction,
+      config.requireApproval,
+    )
+    if (executeBlockedReason) return errorResult(executeBlockedReason)
 
     const statusBeforeExecute = draft.status
     await store.beginExecuting(id)
 
     try {
-      if (expectedAction === "retweet") {
-        await xClient.retweet(draft.tweetId)
-      } else {
-        await xClient.undoRetweet(draft.tweetId)
-      }
+      await runRetweetAction(xClient, expectedAction, draft.tweetId)
 
-      const verb = expectedAction === "retweet" ? "Retweeted" : "Undo retweet completed for"
+      const verb = retweetActionVerb(expectedAction)
       const target = draft.tweetUrl ?? draft.tweetId
       try {
         const updated = await store.markCompleted(id)
