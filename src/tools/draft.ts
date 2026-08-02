@@ -43,7 +43,7 @@ const draftContentFields = {
     .optional()
     .meta({
       description:
-        "Absolute local file paths for media (1–4). Extension selects MIME (jpg/png/webp/gif/mp4); contents are not sniffed. Mutually exclusive with poll and quoteTweetId.",
+        "Absolute local file paths for media (1–4). Symlinks rejected; extension selects MIME (jpg/png/webp/gif/mp4) and contents are verified via magic-byte sniffing. Mutually exclusive with poll and quoteTweetId.",
     }),
   parts: z
     .array(z.string())
