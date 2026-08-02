@@ -1,10 +1,11 @@
 import { open } from "node:fs/promises"
+import path from "node:path"
 import { ensureFreshAccessToken } from "../../auth/oauth2.js"
 import { CredentialStore } from "../../auth/store.js"
 import { NotAuthenticatedError } from "../../auth/errors.js"
 import type { Config } from "../../config.js"
 import { fetchWithTimeout } from "../../util/fetch-with-timeout.js"
-import { resolveMediaCategory } from "./validate.js"
+import { resolveMediaCategory, type MediaCategory } from "./validate.js"
 
 export { NotAuthenticatedError }
 
@@ -50,6 +51,14 @@ const STATUS_MAX_WAIT_MS = 10 * 60_000
 
 const tweetUrl = (id: string) => `https://x.com/i/web/status/${id}`
 
+type MediaProcessingInfo = {
+  state: string
+  check_after_secs?: number
+  error?: { message?: string }
+}
+
+type MediaUploadData = { data: { id: string; processing_info?: MediaProcessingInfo } }
+
 export class XClient {
   private readonly credentialStore: CredentialStore
 
@@ -89,34 +98,184 @@ export class XClient {
     return body as T
   }
 
-  private async mediaFormRequest<T>(form: FormData, timeoutMs: number = MEDIA_UPLOAD_TIMEOUT_MS): Promise<T> {
+  private parseMediaError(response: Response, body: unknown): XApiError {
+    const message =
+      (body as { title?: string; detail?: string } | undefined)?.detail ??
+      (body as { title?: string } | undefined)?.title ??
+      `X media upload failed with status ${response.status}`
+    return new XApiError(message, response.status, body)
+  }
+
+  private async uploadImageSimple(
+    filePath: string,
+    mimeType: string,
+    category: MediaCategory,
+  ): Promise<string> {
     const accessToken = await this.getAccessToken()
-    const response = await fetchWithTimeout(
-      "https://api.x.com/2/media/upload",
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: form,
-      },
-      timeoutMs,
-    )
+    const file = await open(filePath, "r")
+    try {
+      const totalBytes = (await file.stat()).size
+      const buffer = Buffer.alloc(totalBytes)
+      await file.read(buffer, 0, totalBytes, 0)
 
-    // APPEND often returns 204 with an empty body.
-    if (response.status === 204) {
-      return undefined as T
+      const form = new FormData()
+      form.append("media", new Blob([buffer], { type: mimeType }), path.basename(filePath))
+      form.append("media_category", category)
+
+      const response = await fetchWithTimeout(
+        "https://api.x.com/2/media/upload",
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: form,
+        },
+        MEDIA_UPLOAD_TIMEOUT_MS,
+      )
+
+      const body = await response.json().catch(() => undefined)
+      if (!response.ok) {
+        throw this.parseMediaError(response, body)
+      }
+
+      const id = (body as { data?: { id?: string } } | undefined)?.data?.id
+      if (!id) {
+        throw new Error("X API simple media upload response was missing data.id")
+      }
+
+      return id
+    } finally {
+      await file.close()
+    }
+  }
+
+  private async waitForMediaProcessing(
+    mediaId: string,
+    initial: MediaUploadData,
+  ): Promise<string> {
+    let finalizeResult = initial
+    let processing = finalizeResult.data.processing_info
+    const statusDeadline = Date.now() + STATUS_MAX_WAIT_MS
+
+    while (processing && processing.state !== "succeeded") {
+      if (processing.state === "failed") {
+        throw new XApiError(
+          processing.error?.message ?? "Media processing failed",
+          422,
+          finalizeResult,
+        )
+      }
+
+      if (Date.now() >= statusDeadline) {
+        throw new XApiError(
+          `Media processing did not complete in time (last state: ${processing.state})`,
+          408,
+          finalizeResult,
+        )
+      }
+
+      const waitSecs = processing.check_after_secs ?? 1
+      const waitMs = Math.min(waitSecs * 1000, Math.max(0, statusDeadline - Date.now()))
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+
+      const accessToken = await this.getAccessToken()
+      const statusUrl = `https://api.x.com/2/media/upload?command=STATUS&media_id=${encodeURIComponent(mediaId)}`
+      const response = await fetchWithTimeout(
+        statusUrl,
+        { method: "GET", headers: { Authorization: `Bearer ${accessToken}` } },
+        MEDIA_UPLOAD_TIMEOUT_MS,
+      )
+
+      const body = (await response.json().catch(() => undefined)) as MediaUploadData | undefined
+      if (!response.ok) {
+        throw this.parseMediaError(response, body)
+      }
+
+      finalizeResult = body as MediaUploadData
+      processing = finalizeResult.data?.processing_info
+      if (!processing || processing.state === "succeeded") break
     }
 
-    const body = await response.json().catch(() => undefined)
+    return mediaId
+  }
 
-    if (!response.ok) {
-      const message =
-        (body as { title?: string; detail?: string } | undefined)?.detail ??
-        (body as { title?: string } | undefined)?.title ??
-        `X media upload failed with status ${response.status}`
-      throw new XApiError(message, response.status, body)
+  private async uploadMediaChunked(
+    filePath: string,
+    mimeType: string,
+    category: MediaCategory,
+  ): Promise<string> {
+    const file = await open(filePath, "r")
+    try {
+      const totalBytes = (await file.stat()).size
+
+      const initResult = await this.request<{ data: { id: string } }>(
+        "/2/media/upload/initialize",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            total_bytes: totalBytes,
+            media_type: mimeType,
+            media_category: category,
+          }),
+        },
+      )
+      const mediaId = initResult.data.id
+
+      const buffer = Buffer.alloc(MEDIA_CHUNK_SIZE)
+      let segmentIndex = 0
+      let offset = 0
+      while (offset < totalBytes) {
+        const toRead = Math.min(MEDIA_CHUNK_SIZE, totalBytes - offset)
+        const { bytesRead } = await file.read(buffer, 0, toRead, offset)
+        if (bytesRead === 0) break
+
+        const chunk = buffer.subarray(0, bytesRead)
+        const appendForm = new FormData()
+        appendForm.append("media", new Blob([chunk], { type: mimeType }), "chunk")
+        appendForm.append("segment_index", String(segmentIndex))
+
+        const accessToken = await this.getAccessToken()
+        const appendResponse = await fetchWithTimeout(
+          `https://api.x.com/2/media/upload/${encodeURIComponent(mediaId)}/append`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: appendForm,
+          },
+          MEDIA_UPLOAD_TIMEOUT_MS,
+        )
+
+        const appendBody = await appendResponse.json().catch(() => undefined)
+        if (!appendResponse.ok) {
+          throw this.parseMediaError(appendResponse, appendBody)
+        }
+
+        offset += bytesRead
+        segmentIndex += 1
+      }
+
+      const finalizeResult = await this.request<MediaUploadData>(
+        `/2/media/upload/${encodeURIComponent(mediaId)}/finalize`,
+        { method: "POST" },
+      )
+
+      const processing = finalizeResult.data.processing_info
+      if (processing?.state === "failed") {
+        throw new XApiError(
+          processing.error?.message ?? "Media processing failed",
+          422,
+          finalizeResult,
+        )
+      }
+
+      if (processing) {
+        return this.waitForMediaProcessing(mediaId, finalizeResult)
+      }
+
+      return mediaId
+    } finally {
+      await file.close()
     }
-
-    return body as T
   }
 
   async getMe(): Promise<XUser> {
@@ -195,100 +354,10 @@ export class XClient {
       throw new Error(resolved.error)
     }
 
-    const file = await open(filePath, "r")
-    try {
-      const totalBytes = (await file.stat()).size
-
-      const initForm = new FormData()
-      initForm.append("command", "INIT")
-      initForm.append("media_type", resolved.mimeType)
-      initForm.append("total_bytes", String(totalBytes))
-      initForm.append("media_category", resolved.category)
-
-      const initResult = await this.mediaFormRequest<{ data: { id: string } }>(initForm)
-      const mediaId = initResult.data.id
-
-      const buffer = Buffer.alloc(MEDIA_CHUNK_SIZE)
-      let segmentIndex = 0
-      let offset = 0
-      while (offset < totalBytes) {
-        const toRead = Math.min(MEDIA_CHUNK_SIZE, totalBytes - offset)
-        const { bytesRead } = await file.read(buffer, 0, toRead, offset)
-        if (bytesRead === 0) break
-
-        const chunk = buffer.subarray(0, bytesRead)
-        const appendForm = new FormData()
-        appendForm.append("command", "APPEND")
-        appendForm.append("media_id", mediaId)
-        appendForm.append("segment_index", String(segmentIndex))
-        appendForm.append("media", new Blob([chunk], { type: resolved.mimeType }), "chunk")
-        await this.mediaFormRequest(appendForm)
-
-        offset += bytesRead
-        segmentIndex += 1
-      }
-
-      const finalizeForm = new FormData()
-      finalizeForm.append("command", "FINALIZE")
-      finalizeForm.append("media_id", mediaId)
-
-      type ProcessingInfo = {
-        state: string
-        check_after_secs?: number
-        error?: { message?: string }
-      }
-      type MediaData = { data: { id: string; processing_info?: ProcessingInfo } }
-
-      let finalizeResult = await this.mediaFormRequest<MediaData>(finalizeForm)
-      let processing = finalizeResult.data.processing_info
-      const statusDeadline = Date.now() + STATUS_MAX_WAIT_MS
-
-      while (processing && processing.state !== "succeeded") {
-        if (processing.state === "failed") {
-          throw new XApiError(
-            processing.error?.message ?? "Media processing failed",
-            422,
-            finalizeResult,
-          )
-        }
-
-        if (Date.now() >= statusDeadline) {
-          throw new XApiError(
-            `Media processing did not complete in time (last state: ${processing.state})`,
-            408,
-            finalizeResult,
-          )
-        }
-
-        const waitSecs = processing.check_after_secs ?? 1
-        const waitMs = Math.min(waitSecs * 1000, Math.max(0, statusDeadline - Date.now()))
-        await new Promise((resolve) => setTimeout(resolve, waitMs))
-
-        const accessToken = await this.getAccessToken()
-        const statusUrl = `https://api.x.com/2/media/upload?command=STATUS&media_id=${encodeURIComponent(mediaId)}`
-        const response = await fetchWithTimeout(
-          statusUrl,
-          { method: "GET", headers: { Authorization: `Bearer ${accessToken}` } },
-          MEDIA_UPLOAD_TIMEOUT_MS,
-        )
-
-        const body = (await response.json().catch(() => undefined)) as MediaData | undefined
-        if (!response.ok) {
-          const message =
-            (body as { title?: string; detail?: string } | undefined)?.detail ??
-            (body as { title?: string } | undefined)?.title ??
-            `X media STATUS failed with status ${response.status}`
-          throw new XApiError(message, response.status, body)
-        }
-
-        finalizeResult = body as MediaData
-        processing = finalizeResult.data?.processing_info
-        if (!processing || processing.state === "succeeded") break
-      }
-
-      return mediaId
-    } finally {
-      await file.close()
+    if (resolved.category === "tweet_image") {
+      return this.uploadImageSimple(filePath, resolved.mimeType, resolved.category)
     }
+
+    return this.uploadMediaChunked(filePath, resolved.mimeType, resolved.category)
   }
 }

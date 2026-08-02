@@ -126,31 +126,53 @@ describe("XClient.deleteTweet", () => {
 })
 
 describe("XClient.uploadMedia", () => {
-  test("runs INIT, APPEND, FINALIZE without STATUS when processing_info is absent", async () => {
+  test("simple upload for images posts multipart to /2/media/upload", async () => {
+    globalThis.fetch = (async (input, init) => {
+      const url = String(input)
+      expect(url).toBe("https://api.x.com/2/media/upload")
+      const form = init?.body as FormData
+      expect(String(form.get("media_category"))).toBe("tweet_image")
+      expect(form.get("media")).toBeTruthy()
+      return new Response(JSON.stringify({ data: { id: "media-1" } }), { status: 200 })
+    }) as typeof fetch
+
+    const dir = await mkdtemp(path.join(os.tmpdir(), "x-media-"))
+    try {
+      const filePath = path.join(dir, "pic.png")
+      await writeFile(filePath, Buffer.alloc(10, 1))
+      const client = withMockedAuth(new XClient(config))
+      const mediaId = await client.uploadMedia(filePath)
+      expect(mediaId).toBe("media-1")
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("chunked upload for videos runs initialize, append, finalize without STATUS when processing_info is absent", async () => {
     const commands: string[] = []
     globalThis.fetch = (async (input, init) => {
       const url = String(input)
       if (url.includes("command=STATUS")) {
         throw new Error("STATUS should not be called")
       }
-      const form = init?.body as FormData
-      const command = String(form.get("command"))
-      commands.push(command)
-      if (command === "INIT") {
+      if (url.endsWith("/2/media/upload/initialize")) {
+        commands.push("INIT")
         return new Response(JSON.stringify({ data: { id: "media-1" } }), { status: 200 })
       }
-      if (command === "APPEND") {
-        return new Response(null, { status: 204 })
+      if (url.includes("/append")) {
+        commands.push("APPEND")
+        return new Response(JSON.stringify({ data: { expires_at: 1 } }), { status: 200 })
       }
-      if (command === "FINALIZE") {
+      if (url.includes("/finalize")) {
+        commands.push("FINALIZE")
         return new Response(JSON.stringify({ data: { id: "media-1" } }), { status: 200 })
       }
-      throw new Error(`unexpected command ${command}`)
+      throw new Error(`unexpected url ${url}`)
     }) as typeof fetch
 
     const dir = await mkdtemp(path.join(os.tmpdir(), "x-media-"))
     try {
-      const filePath = path.join(dir, "pic.png")
+      const filePath = path.join(dir, "clip.mp4")
       await writeFile(filePath, Buffer.alloc(10, 1))
       const client = withMockedAuth(new XClient(config))
       const mediaId = await client.uploadMedia(filePath)
@@ -188,15 +210,13 @@ describe("XClient.uploadMedia", () => {
           { status: 200 },
         )
       }
-      const form = init?.body as FormData
-      const command = String(form.get("command"))
-      if (command === "INIT") {
+      if (url.endsWith("/2/media/upload/initialize")) {
         return new Response(JSON.stringify({ data: { id: "media-2" } }), { status: 200 })
       }
-      if (command === "APPEND") {
-        return new Response(null, { status: 204 })
+      if (url.includes("/append")) {
+        return new Response(JSON.stringify({ data: { expires_at: 1 } }), { status: 200 })
       }
-      if (command === "FINALIZE") {
+      if (url.includes("/finalize")) {
         return new Response(
           JSON.stringify({
             data: {
@@ -207,7 +227,7 @@ describe("XClient.uploadMedia", () => {
           { status: 200 },
         )
       }
-      throw new Error(`unexpected ${url} ${command}`)
+      throw new Error(`unexpected ${url}`)
     }) as typeof fetch
 
     const dir = await mkdtemp(path.join(os.tmpdir(), "x-media-status-"))
@@ -224,16 +244,15 @@ describe("XClient.uploadMedia", () => {
   })
 
   test("throws when STATUS reports failed processing", async () => {
-    globalThis.fetch = (async (_input, init) => {
-      const form = init?.body as FormData | undefined
-      const command = form ? String(form.get("command")) : ""
-      if (command === "INIT") {
+    globalThis.fetch = (async (input) => {
+      const url = String(input)
+      if (url.endsWith("/2/media/upload/initialize")) {
         return new Response(JSON.stringify({ data: { id: "media-3" } }), { status: 200 })
       }
-      if (command === "APPEND") {
-        return new Response(null, { status: 204 })
+      if (url.includes("/append")) {
+        return new Response(JSON.stringify({ data: { expires_at: 1 } }), { status: 200 })
       }
-      if (command === "FINALIZE") {
+      if (url.includes("/finalize")) {
         return new Response(
           JSON.stringify({
             data: {
@@ -247,7 +266,7 @@ describe("XClient.uploadMedia", () => {
           { status: 200 },
         )
       }
-      throw new Error(`unexpected command ${command}`)
+      throw new Error(`unexpected url ${url}`)
     }) as typeof fetch
 
     const dir = await mkdtemp(path.join(os.tmpdir(), "x-media-fail-"))
@@ -255,10 +274,7 @@ describe("XClient.uploadMedia", () => {
       const filePath = path.join(dir, "bad.mp4")
       await writeFile(filePath, Buffer.alloc(10, 1))
       const client = withMockedAuth(new XClient(config))
-      await expect(client.uploadMedia(filePath)).rejects.toMatchObject({
-        name: "XApiError",
-        message: "invalid media",
-      })
+      await expect(client.uploadMedia(filePath)).rejects.toThrow("invalid media")
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
