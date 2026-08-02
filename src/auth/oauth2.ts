@@ -8,7 +8,7 @@ import { fetchWithTimeout } from "../util/fetch-with-timeout.js"
 
 const AUTHORIZE_URL = "https://x.com/i/oauth2/authorize"
 const TOKEN_URL = "https://api.x.com/2/oauth2/token"
-const SCOPES = ["tweet.read", "tweet.write", "users.read", "offline.access"]
+const SCOPES = ["tweet.read", "tweet.write", "users.read", "offline.access", "media.write"]
 const AUTHORIZATION_TIMEOUT_MS = 5 * 60_000
 // Refresh well before expiry: tool calls can chain (draft -> approve ->
 // publish), and X's refresh tokens are single-use, so we'd rather refresh a

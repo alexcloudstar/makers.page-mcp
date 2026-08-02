@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Full X manage-posts surface beyond text-only: threads (`parts`), polls, media upload (`mediaPaths` + chunked `/2/media/upload`), quote tweets, community posts (`communityId` / `shareWithFollowers`), and paid partnership.
+- Tools: `edit_published_draft` (root post only; persists the new post id X returns) and `delete_published_draft` (deletes all stored ids, then marks the draft `deleted`).
+- OAuth scope `media.write` (re-run `makers-page-mcp-auth` after upgrading if you need media).
+- Draft status `deleted`; store helpers for partial thread publish and edit id replacement.
+
+### Changed
+
+- `create_draft` / `update_draft` accept the extended X fields; `poll`, `mediaPaths`, and `quoteTweetId` are mutually exclusive.
+- `publish_draft` uploads media, posts thread replies to the previous part, and on mid-thread failure records posted ids while leaving status `publishing` (no auto-retry).
+- Partial publishes with recorded live ids cannot be reset via `reject_draft` / `update_draft` (would orphan posts); use `delete_published_draft` instead (allowed whenever live ids are recorded).
+- `edit_published_draft` re-uploads `mediaPaths` and re-sends `quoteTweetId` / `paidPartnership` so edits do not strip attachments or flags.
+- Media validation rejects GIF/video mixes and multiple GIFs/videos; media STATUS polling waits up to 10 minutes.
+
+### Notes / caveats
+
+- Quote tweets are Enterprise-only on self-serve X API tiers (tool still sends `quote_tweet_id`).
+- Edit requires X Premium and is limited (~30 minutes / 5 edits); each edit creates a new post id.
+- Self-serve blocks replies to other accounts unless summoned; self-threads still work.
+- Self-serve: max one cashtag per post.
+
 ## [0.1.2] - 2026-07-31
 
 ### Added

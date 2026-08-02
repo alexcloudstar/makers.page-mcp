@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { DraftNotFoundError, DraftStore, InvalidDraftTransitionError } from "./store.js"
+import {
+  DraftHasLivePostsError,
+  DraftNotFoundError,
+  DraftStore,
+  InvalidDraftTransitionError,
+} from "./store.js"
 
 let draftsDir: string
 let store: DraftStore
@@ -85,13 +90,14 @@ describe("DraftStore", () => {
     expect(updated.status).toBe("draft")
   })
 
-  test("updateText does not resurrect a published draft out of its terminal status", async () => {
+  test("updateText refuses to mutate a published draft", async () => {
     const created = await store.create({ channel: "x", text: "hello" })
     await store.beginPublishing(created.id)
     await store.markPublished(created.id, { externalId: "1", url: "https://x.com/i/web/status/1" })
-    const updated = await store.updateText(created.id, "edited after publish")
-    expect(updated.status).toBe("published")
-    expect(updated.text).toBe("edited after publish")
+    await expect(store.updateText(created.id, "edited after publish")).rejects.toThrow(
+      InvalidDraftTransitionError,
+    )
+    expect((await store.get(created.id)).text).toBe("hello")
   })
 
   test("full reconciliation round-trip: publishing -> updateText -> draft -> approve -> approved", async () => {
@@ -138,5 +144,134 @@ describe("DraftStore", () => {
 
     const approvedOnly = await store.list("approved")
     expect(approvedOnly.map((d) => d.id)).toEqual([second.id])
+  })
+
+  test("create persists extended fields", async () => {
+    const draft = await store.create({
+      channel: "x",
+      text: "one",
+      parts: ["one", "two"],
+      communityId: "c1",
+      shareWithFollowers: true,
+      paidPartnership: true,
+    })
+    const fetched = await store.get(draft.id)
+    expect(fetched.parts).toEqual(["one", "two"])
+    expect(fetched.communityId).toBe("c1")
+    expect(fetched.shareWithFollowers).toBe(true)
+    expect(fetched.paidPartnership).toBe(true)
+  })
+
+  test("recordPartialPublish keeps publishing status and stores ids", async () => {
+    const created = await store.create({ channel: "x", text: "hello" })
+    await store.beginPublishing(created.id)
+    const partial = await store.recordPartialPublish(created.id, {
+      externalIds: ["1"],
+      urls: ["https://x.com/i/web/status/1"],
+    })
+    expect(partial.status).toBe("publishing")
+    expect(partial.externalIds).toEqual(["1"])
+  })
+
+  test("reject/update refuse drafts with recorded live ids (partial publish)", async () => {
+    const created = await store.create({ channel: "x", text: "hello" })
+    await store.beginPublishing(created.id)
+    await store.recordPartialPublish(created.id, {
+      externalIds: ["1"],
+      urls: ["https://x.com/i/web/status/1"],
+    })
+    await expect(store.reject(created.id)).rejects.toThrow(DraftHasLivePostsError)
+    await expect(store.updateText(created.id, "nope")).rejects.toThrow(DraftHasLivePostsError)
+    expect((await store.get(created.id)).status).toBe("publishing")
+  })
+
+  test("markDeleted moves published -> deleted", async () => {
+    const created = await store.create({ channel: "x", text: "hello" })
+    await store.beginPublishing(created.id)
+    await store.markPublished(created.id, { externalId: "1", url: "https://x.com/i/web/status/1" })
+    const deleted = await store.markDeleted(created.id)
+    expect(deleted.status).toBe("deleted")
+  })
+
+  test("markDeleted allows publishing -> deleted for partial-publish cleanup", async () => {
+    const created = await store.create({ channel: "x", text: "hello" })
+    await store.beginPublishing(created.id)
+    await store.recordPartialPublish(created.id, {
+      externalIds: ["1"],
+      urls: ["https://x.com/i/web/status/1"],
+    })
+    const deleted = await store.markDeleted(created.id)
+    expect(deleted.status).toBe("deleted")
+  })
+
+  test("applyEdit replaces the root externalId with the new post id", async () => {
+    const created = await store.create({
+      channel: "x",
+      text: "one",
+      parts: ["one", "two"],
+    })
+    await store.beginPublishing(created.id)
+    await store.markPublished(created.id, {
+      externalId: "1",
+      url: "https://x.com/i/web/status/1",
+      externalIds: ["1", "2"],
+      urls: ["https://x.com/i/web/status/1", "https://x.com/i/web/status/2"],
+    })
+
+    const edited = await store.applyEdit(created.id, {
+      text: "one edited",
+      externalId: "9",
+      url: "https://x.com/i/web/status/9",
+    })
+    expect(edited.externalId).toBe("9")
+    expect(edited.externalIds).toEqual(["9", "2"])
+    expect(edited.urls?.[0]).toBe("https://x.com/i/web/status/9")
+    expect(edited.text).toBe("one edited")
+    expect(edited.parts?.[0]).toBe("one edited")
+  })
+
+  test("update clears optional fields when null is passed", async () => {
+    const created = await store.create({
+      channel: "x",
+      text: "hello",
+      quoteTweetId: "99",
+      paidPartnership: true,
+    })
+    const updated = await store.update(created.id, {
+      quoteTweetId: null,
+      paidPartnership: null,
+    })
+    expect(updated.quoteTweetId).toBeUndefined()
+    expect(updated.paidPartnership).toBeUndefined()
+  })
+
+  test("reject refuses to touch a deleted draft", async () => {
+    const created = await store.create({ channel: "x", text: "hello" })
+    await store.beginPublishing(created.id)
+    await store.markPublished(created.id, { externalId: "1", url: "https://x.com/i/web/status/1" })
+    await store.markDeleted(created.id)
+    await expect(store.reject(created.id)).rejects.toThrow(InvalidDraftTransitionError)
+  })
+
+  test("setRemainingLiveIds keeps published status with the leftover ids", async () => {
+    const created = await store.create({ channel: "x", text: "hello" })
+    await store.beginPublishing(created.id)
+    await store.markPublished(created.id, {
+      externalId: "1",
+      url: "https://x.com/i/web/status/1",
+      externalIds: ["1", "2", "3"],
+      urls: [
+        "https://x.com/i/web/status/1",
+        "https://x.com/i/web/status/2",
+        "https://x.com/i/web/status/3",
+      ],
+    })
+    const remaining = await store.setRemainingLiveIds(created.id, {
+      externalIds: ["2", "3"],
+      urls: ["https://x.com/i/web/status/2", "https://x.com/i/web/status/3"],
+    })
+    expect(remaining.status).toBe("published")
+    expect(remaining.externalIds).toEqual(["2", "3"])
+    expect(remaining.externalId).toBe("2")
   })
 })

@@ -127,7 +127,7 @@ npx -y makers-page-mcp-auth   # npm install
 bun run auth                  # from source
 ```
 
-This prints an authorize URL: open it, log in as the X account you want to post from, and approve. The server captures the redirect locally and stores an access + refresh token at `~/.config/makers-page-mcp/credentials.json`. Tokens auto-refresh on future use; you shouldn't need to run this again unless you revoke access.
+This prints an authorize URL: open it, log in as the X account you want to post from, and approve. The server captures the redirect locally and stores an access + refresh token at `~/.config/makers-page-mcp/credentials.json`. Tokens auto-refresh on future use; re-run auth if you revoke access, or after upgrading to a version that adds scopes (e.g. `media.write` for image/GIF/video uploads).
 
 ### 4. Connect it to your coding agent
 
@@ -191,25 +191,51 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 
 | Tool | What it does |
 |------|--------------|
-| `create_draft` | Save a new draft post (`{ channel: "x", text }`). |
-| `list_drafts` | List drafts, optionally filtered by status. |
+| `create_draft` | Save a new draft post for X. Required: `{ channel: "x", text }`. Optional: `parts` (thread), `poll`, `mediaPaths` (absolute local paths, max 4), `quoteTweetId`, `communityId`, `shareWithFollowers`, `paidPartnership`. |
+| `list_drafts` | List drafts, optionally filtered by status (`draft`, `approved`, `rejected`, `publishing`, `published`, `deleted`). |
 | `get_draft` | Fetch a single draft by id. |
-| `update_draft` | Edit a draft's text. Resets an approved or rejected draft back to `draft` so it can be re-approved. |
+| `update_draft` | Edit draft content (same fields as create; pass `null` to clear an optional field). Resets an approved or rejected draft back to `draft` so it can be re-approved. |
 | `approve_draft` | Mark a draft approved. Required before publishing (unless approvals are disabled). |
-| `reject_draft` | Mark a draft rejected. Also the way to manually reconcile a draft stuck in `publishing` after a crashed/interrupted publish attempt. |
-| `publish_draft` | Publish an approved draft to X via `POST /2/tweets`. Returns the live URL. If the request fails ambiguously (e.g. a timeout), the draft is left in `publishing` rather than auto-retried, to avoid a duplicate paid post (see below). |
+| `reject_draft` | Mark a draft rejected. Also reconciles a draft stuck in `publishing` when nothing was posted (no recorded live ids). If live ids were recorded, use `delete_published_draft` instead. |
+| `publish_draft` | Publish an approved draft to X via `POST /2/tweets` (uploads media first when needed; threads reply to the previous part). Returns the live URL(s). If the request fails ambiguously (e.g. a timeout), or a thread fails mid-way, the draft is left in `publishing` rather than auto-retried. |
+| `edit_published_draft` | Edit the **root** post of a published draft (`edit_options.previous_post_id`). Re-attaches media/quote when present. Each edit creates a new post id, which is stored locally. Rejects polls and community posts. |
+| `delete_published_draft` | Delete every stored post id on X whenever live ids are recorded (published, partial `publishing`, or legacy/corrupt records), then mark the local draft `deleted`. |
 | `get_x_account` | Check connection status and show the connected `@handle`. |
 
 Typical agent flow: `create_draft` → show the user the draft → user says "approve" → `approve_draft` → `publish_draft`.
+
+### X create/update fields
+
+| Field | Notes |
+|------|--------|
+| `text` | Post copy. Must equal `parts[0]` when `parts` is set. On `update_draft`, if both `text` and `parts` are sent and disagree, **`text` wins** and becomes `parts[0]`. |
+| `parts` | Thread of 2+ posts. Polls are not allowed on threads. |
+| `poll` | `{ options: string[2..4], durationMinutes: 5..10080 }`. Mutually exclusive with `mediaPaths` and `quoteTweetId`. |
+| `mediaPaths` | Absolute local paths (`.jpg`/`.jpeg`/`.png`/`.webp`/`.gif`/`.mp4`), 1–4 files. Up to 4 images, or one GIF, or one video (no mixing). MIME/category is chosen from the **file extension** (contents are not sniffed). Requires re-auth with `media.write` (see below). |
+| `quoteTweetId` | Quote another post. **Enterprise-only** on self-serve / pay-per-use X API tiers — the tool still sends it; X may reject. |
+| `communityId` / `shareWithFollowers` | Post to a Community; `shareWithFollowers` requires `communityId`. |
+| `paidPartnership` | Sets `paid_partnership: true` on create (and on edit when provided). |
+
+### Caveats (X product limits)
+
+- **Re-auth for media:** OAuth scopes now include `media.write`. If you authorized before this change, run `makers-page-mcp-auth` / `bun run auth` once more.
+- **Quote posts:** OpenAPI documents quote as Enterprise-only on self-serve; expect API errors on lower tiers.
+- **Edit:** Requires **X Premium**, roughly a **30-minute** window and **up to 5 edits** from the original. Each edit returns a **new post id** (we update the local draft). Polls and community posts are not editable.
+- **Replies:** Self-serve apps can create **self-threads** (reply to your own previous part). Replies to *other* accounts are blocked unless summoned.
+- **Cashtags:** Self-serve allows **at most one cashtag** (`$TICKER`) per post.
 
 ## If a publish attempt fails ambiguously
 
 `publish_draft` marks a draft `publishing` before calling the X API, and only clears that if the API gives a
 definitive answer (a real HTTP response, or a clear "not authenticated" error). If the request instead fails
 in a way that could mean X received it anyway (a timeout or network drop), the draft is deliberately left in
-`publishing` and **not** auto-reverted, so an agent can't retry and risk a second, real, paid post. In that
-case: check your X account for the post yourself, then call `reject_draft` (if it didn't go out) or
-`update_draft` (to edit and reset it to `draft`) to reconcile the local record.
+`publishing` and **not** auto-reverted, so an agent can't retry and risk a second, real, paid post.
+
+Reconciliation:
+
+- **Nothing posted** (no live ids recorded): call `reject_draft` or `update_draft` to reset.
+- **Partial thread** (some ids recorded): do **not** retry `publish_draft`. Call `delete_published_draft` to remove the live posts, or finish the remainder on X manually.
+- **Ambiguous single post** (may or may not have posted, no ids recorded): check X yourself; if it did not post, reset with `reject_draft` / `update_draft`; if it did, leave the draft as-is and note the URL.
 
 ## Configuration
 
@@ -231,7 +257,7 @@ Destination: **one local indie stack MCP** that already knows the founder tools 
 
 **Shipped**
 
-- Text-only posts to X (no media, threads, or polls), with draft → approve → publish and crash-safe publish semantics.
+- X manage-posts: text, threads, polls, media (chunked upload), quote, community + `share_with_followers`, paid partnership, edit, and delete — still behind draft → approve → publish with crash-safe / no-auto-retry semantics.
 
 **Next**
 
