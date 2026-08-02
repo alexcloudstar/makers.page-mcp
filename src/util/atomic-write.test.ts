@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { writeFileAtomic } from "./atomic-write.js"
+import { writeFileAtomic, PRIVATE_FILE_MODE } from "./atomic-write.js"
 
 let dir: string
 
@@ -17,7 +17,7 @@ afterEach(async () => {
 describe("writeFileAtomic", () => {
   test("writes the file with the given contents", async () => {
     const filePath = path.join(dir, "draft.json")
-    await writeFileAtomic(filePath, JSON.stringify({ a: 1 }))
+    await writeFileAtomic(filePath, JSON.stringify({ a: 1 }), { mode: PRIVATE_FILE_MODE })
     expect(await readFile(filePath, "utf8")).toBe(JSON.stringify({ a: 1 }))
   })
 

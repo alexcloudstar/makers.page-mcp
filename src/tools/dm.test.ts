@@ -7,6 +7,7 @@ import type { Config } from "../config.js"
 import { DmDraftStore } from "../dm/store.js"
 import { DmRateLimiter } from "../dm/rate-limit.js"
 import { registerDmTools } from "./dm.js"
+import { MINIMAL_PNG } from "../test-helpers/media-fixtures.js"
 
 class StubServer {
   private handlers = new Map<string, (args: Record<string, unknown>) => Promise<CallToolResult>>()
@@ -140,7 +141,7 @@ describe("send_dm_draft", () => {
   test("sends dm with media attachment", async () => {
     const mediaDir = await mkdtemp(path.join(os.tmpdir(), "dm-media-"))
     const mediaPath = path.join(mediaDir, "x.png")
-    await writeFile(mediaPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0, 0, 0]))
+    await writeFile(mediaPath, MINIMAL_PNG)
 
     const store = new DmDraftStore(config)
     const draft = await store.create({

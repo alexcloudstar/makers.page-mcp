@@ -1,7 +1,7 @@
 import { mkdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import type { Config } from "../config.js"
-import { writeFileAtomic } from "../util/atomic-write.js"
+import { PRIVATE_FILE_MODE, writeFileAtomic } from "../util/atomic-write.js"
 import { createKeyedLock } from "../util/lock.js"
 
 export class DmRateLimitError extends Error {
@@ -54,7 +54,7 @@ export class DmRateLimiter {
 
   private async writeState(state: RateLimitState): Promise<void> {
     await mkdir(path.dirname(this.statePath), { recursive: true })
-    await writeFileAtomic(this.statePath, JSON.stringify(state, null, 2))
+    await writeFileAtomic(this.statePath, JSON.stringify(state, null, 2), { mode: PRIVATE_FILE_MODE })
   }
 
   private assertWithinLimits(

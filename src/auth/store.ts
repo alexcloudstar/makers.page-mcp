@@ -1,7 +1,7 @@
 import { mkdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import type { Config } from "../config.js"
-import { writeFileAtomic } from "../util/atomic-write.js"
+import { PRIVATE_FILE_MODE, writeFileAtomic } from "../util/atomic-write.js"
 
 export type Credentials = {
   accessToken: string
@@ -29,6 +29,8 @@ export class CredentialStore {
 
   async write(credentials: Credentials): Promise<void> {
     await mkdir(path.dirname(this.credentialsPath), { recursive: true })
-    await writeFileAtomic(this.credentialsPath, JSON.stringify(credentials, null, 2), { mode: 0o600 })
+    await writeFileAtomic(this.credentialsPath, JSON.stringify(credentials, null, 2), {
+      mode: PRIVATE_FILE_MODE,
+    })
   }
 }

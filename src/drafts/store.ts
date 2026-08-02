@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 import type { Config } from "../config.js"
 import type { CreateDraftInput, Draft, DraftStatus, UpdateDraftInput } from "./types.js"
-import { writeFileAtomic } from "../util/atomic-write.js"
+import { PRIVATE_FILE_MODE, writeFileAtomic } from "../util/atomic-write.js"
 import { createKeyedLock } from "../util/lock.js"
 
 export class DraftNotFoundError extends Error {
@@ -376,6 +376,8 @@ export class DraftStore {
 
   private async write(draft: Draft): Promise<void> {
     await this.ensureDir()
-    await writeFileAtomic(draftPath(this.draftsDir, draft.id), JSON.stringify(draft, null, 2))
+    await writeFileAtomic(draftPath(this.draftsDir, draft.id), JSON.stringify(draft, null, 2), {
+      mode: PRIVATE_FILE_MODE,
+    })
   }
 }

@@ -38,6 +38,9 @@ Out of scope:
 A few things worth knowing if you're auditing this project:
 
 - Credentials (`~/.config/makers-page-mcp/credentials.json` by default) are written with `0600` permissions and never logged.
+- Drafts, DM drafts, retweet drafts, and DM rate-limit state under `MAKERS_PAGE_DATA_DIR` are also written with `0600` permissions.
+- The OAuth callback server only binds to loopback addresses; `X_REDIRECT_URI` must use `127.0.0.1`, `localhost`, or `::1`.
+- Media uploads reject symbolic links and verify file magic bytes match the declared extension.
 - The server only ever talks to `api.x.com` and `x.com` (for the OAuth authorize step); there's no telemetry and no third-party network calls.
 - Draft IDs are validated as well-formed UUIDs before being used in any filesystem path, to prevent path traversal.
 - Publishing is designed to fail closed: on an ambiguous error (e.g. a network timeout while creating a post), the draft is left in a `publishing` state rather than being retried automatically, specifically to avoid a duplicate, real, paid post to X. See the README's "If a publish attempt fails ambiguously" section for the full reasoning.

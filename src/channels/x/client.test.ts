@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import type { Config } from "../../config.js"
+import { MINIMAL_MP4, MINIMAL_PNG } from "../../test-helpers/media-fixtures.js"
 import { XClient } from "./client.js"
 
 const originalFetch = globalThis.fetch
@@ -143,7 +144,7 @@ describe("XClient.uploadMedia", () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "x-media-"))
     try {
       const filePath = path.join(dir, "pic.png")
-      await writeFile(filePath, Buffer.alloc(10, 1))
+      await writeFile(filePath, MINIMAL_PNG)
       const client = withMockedAuth(new XClient(config))
       const mediaId = await client.uploadMedia(filePath)
       expect(mediaId).toBe("media-1")
@@ -177,7 +178,7 @@ describe("XClient.uploadMedia", () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "x-media-"))
     try {
       const filePath = path.join(dir, "clip.mp4")
-      await writeFile(filePath, Buffer.alloc(10, 1))
+      await writeFile(filePath, MINIMAL_MP4)
       const client = withMockedAuth(new XClient(config))
       const mediaId = await client.uploadMedia(filePath)
       expect(mediaId).toBe("media-1")
@@ -237,7 +238,7 @@ describe("XClient.uploadMedia", () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "x-media-status-"))
     try {
       const filePath = path.join(dir, "clip.mp4")
-      await writeFile(filePath, Buffer.alloc(10, 1))
+      await writeFile(filePath, MINIMAL_MP4)
       const client = withMockedAuth(new XClient(config))
       const mediaId = await client.uploadMedia(filePath)
       expect(mediaId).toBe("media-2")
@@ -276,7 +277,7 @@ describe("XClient.uploadMedia", () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "x-media-fail-"))
     try {
       const filePath = path.join(dir, "bad.mp4")
-      await writeFile(filePath, Buffer.alloc(10, 1))
+      await writeFile(filePath, MINIMAL_MP4)
       const client = withMockedAuth(new XClient(config))
       await expect(client.uploadMedia(filePath)).rejects.toThrow("invalid media")
     } finally {

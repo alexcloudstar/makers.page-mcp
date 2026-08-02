@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 import type { Config } from "../config.js"
 import type { CreateRetweetDraftInput, RetweetDraft, RetweetDraftStatus } from "./types.js"
-import { writeFileAtomic } from "../util/atomic-write.js"
+import { PRIVATE_FILE_MODE, writeFileAtomic } from "../util/atomic-write.js"
 import { createKeyedLock } from "../util/lock.js"
 
 export class RetweetDraftNotFoundError extends Error {
@@ -143,6 +143,8 @@ export class RetweetDraftStore {
 
   private async write(draft: RetweetDraft): Promise<void> {
     await this.ensureDir()
-    await writeFileAtomic(draftPath(this.draftsDir, draft.id), JSON.stringify(draft, null, 2))
+    await writeFileAtomic(draftPath(this.draftsDir, draft.id), JSON.stringify(draft, null, 2), {
+      mode: PRIVATE_FILE_MODE,
+    })
   }
 }
