@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-03
+
 ### Added
 
 - X Direct Messages: draft → approve → send flow with local rate limits (`MAKERS_PAGE_DM_MAX_PER_HOUR`, `MAKERS_PAGE_DM_MAX_PER_DAY`, `MAKERS_PAGE_DM_MIN_INTERVAL_MS`).
@@ -74,7 +76,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - OAuth 2.0 (PKCE) authorization flow for connecting an X account.
 - Local, file-based draft storage with an approval gate before publishing.
 
-[Unreleased]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/alexcloudstar/makers.page-mcp/releases/tag/v0.1.0
