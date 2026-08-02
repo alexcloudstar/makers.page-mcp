@@ -58,6 +58,44 @@ const formatPublishError = (error: unknown): string => {
 
 const publishedIds = (draft: Draft): string[] => recordedLiveIds(draft)
 
+type PublishThreadContext = {
+  draft: Pick<
+    Draft,
+    "poll" | "quoteTweetId" | "communityId" | "shareWithFollowers" | "paidPartnership"
+  >
+  mediaIds?: string[]
+}
+
+const buildRootTweetInput = (text: string, ctx: PublishThreadContext): CreateTweetInput => {
+  const input: CreateTweetInput = { text }
+  if (ctx.mediaIds) input.mediaIds = ctx.mediaIds
+  if (ctx.draft.poll) {
+    input.poll = {
+      options: ctx.draft.poll.options,
+      durationMinutes: ctx.draft.poll.durationMinutes,
+    }
+  }
+  if (ctx.draft.quoteTweetId) input.quoteTweetId = ctx.draft.quoteTweetId
+  if (ctx.draft.communityId) input.communityId = ctx.draft.communityId
+  if (ctx.draft.shareWithFollowers !== undefined) {
+    input.shareWithFollowers = ctx.draft.shareWithFollowers
+  }
+  if (ctx.draft.paidPartnership !== undefined) {
+    input.paidPartnership = ctx.draft.paidPartnership
+  }
+  return input
+}
+
+const buildThreadPartInput = (
+  text: string,
+  partIndex: number,
+  previousExternalIds: string[],
+  ctx: PublishThreadContext,
+): CreateTweetInput => {
+  if (partIndex === 0) return buildRootTweetInput(text, ctx)
+  return { text, replyToId: previousExternalIds[partIndex - 1] }
+}
+
 export const registerPublishTools = (server: McpServer, config: Config, deps: PublishDeps = {}): void => {
   const store = deps.store ?? new DraftStore(config)
   const xClient = deps.xClient ?? new XClient(config)
@@ -154,28 +192,10 @@ export const registerPublishTools = (server: McpServer, config: Config, deps: Pu
             }
           }
 
-          for (let i = 0; i < parts.length; i++) {
-            const input: CreateTweetInput = { text: parts[i]! }
-            if (i === 0) {
-              if (mediaIds) input.mediaIds = mediaIds
-              if (draft.poll) {
-                input.poll = {
-                  options: draft.poll.options,
-                  durationMinutes: draft.poll.durationMinutes,
-                }
-              }
-              if (draft.quoteTweetId) input.quoteTweetId = draft.quoteTweetId
-              if (draft.communityId) input.communityId = draft.communityId
-              if (draft.shareWithFollowers !== undefined) {
-                input.shareWithFollowers = draft.shareWithFollowers
-              }
-              if (draft.paidPartnership !== undefined) {
-                input.paidPartnership = draft.paidPartnership
-              }
-            } else {
-              input.replyToId = externalIds[i - 1]
-            }
+          const threadContext: PublishThreadContext = { draft, mediaIds }
 
+          for (const [partIndex, partText] of parts.entries()) {
+            const input = buildThreadPartInput(partText, partIndex, externalIds, threadContext)
             tweetRequestStarted = true
             const tweet = await xClient.createTweet(input)
             externalIds.push(tweet.id)
