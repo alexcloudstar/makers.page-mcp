@@ -98,9 +98,10 @@ export const loadConfig = (): Config => {
       minIntervalMs: resolvePositiveInt("MAKERS_PAGE_DM_MIN_INTERVAL_MS", DEFAULT_DM_MIN_INTERVAL_MS),
     },
     x: {
-      clientId: process.env.X_CLIENT_ID,
-      clientSecret: process.env.X_CLIENT_SECRET,
-      redirectUri: process.env.X_REDIRECT_URI ?? "http://127.0.0.1:8879/callback",
+      clientId: process.env.TWITTER_CLIENT_ID,
+      clientSecret: process.env.TWITTER_CLIENT_SECRET,
+      redirectUri:
+        process.env.TWITTER_REDIRECT_URI ?? "http://127.0.0.1:8879/callback",
     },
   }
 }

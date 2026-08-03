@@ -55,7 +55,7 @@ const basicAuthHeader = (clientId: string, clientSecret?: string): string | unde
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"])
 
 const formatTokenExchangeError = (action: "exchange authorization code" | "refresh access token", status: number): string =>
-  `Failed to ${action} (HTTP ${status}). Verify X_CLIENT_ID, X_CLIENT_SECRET (if confidential), and X_REDIRECT_URI.`
+  `Failed to ${action} (HTTP ${status}). Verify TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET (if confidential), and TWITTER_REDIRECT_URI.`
 
 /** OAuth callback must stay on loopback so the local auth server is not exposed on the network. */
 export const resolveOAuthCallbackListenTarget = (
@@ -65,14 +65,16 @@ export const resolveOAuthCallbackListenTarget = (
   const hostname = url.hostname.toLowerCase()
   if (!LOOPBACK_HOSTS.has(hostname)) {
     throw new Error(
-      `X_REDIRECT_URI must use a loopback host (127.0.0.1, localhost, or ::1), got "${url.hostname}".`,
+      `TWITTER_REDIRECT_URI must use a loopback host (127.0.0.1, localhost, or ::1), got "${url.hostname}".`,
     )
   }
 
   const host = hostname === "::1" || hostname === "[::1]" ? "::1" : "127.0.0.1"
   const port = Number(url.port || (url.protocol === "https:" ? 443 : 80))
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`X_REDIRECT_URI has an invalid port: "${url.port || "(default)"}".`)
+    throw new Error(
+      `TWITTER_REDIRECT_URI has an invalid port: "${url.port || "(default)"}".`,
+    )
   }
 
   return { host, port, pathname: url.pathname }
@@ -139,7 +141,7 @@ const refreshAccessToken = async (config: Config, refreshToken: string): Promise
 const requireClientId = (config: Config): string => {
   if (!config.x.clientId) {
     throw new Error(
-      "X_CLIENT_ID is not set. Create an OAuth 2.0 app in the X developer portal and set X_CLIENT_ID (and X_CLIENT_SECRET if it's a confidential client).",
+      "TWITTER_CLIENT_ID is not set. Create an OAuth 2.0 app in the X developer portal and set TWITTER_CLIENT_ID (and TWITTER_CLIENT_SECRET if it's a confidential client).",
     )
   }
   return config.x.clientId
