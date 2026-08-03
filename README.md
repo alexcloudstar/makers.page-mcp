@@ -114,9 +114,9 @@ bun run build
 Set these environment variables (from your X developer app, step 1):
 
 ```bash
-export X_CLIENT_ID=your-client-id
-export X_CLIENT_SECRET=your-client-secret   # omit if your app is a public client
-export X_REDIRECT_URI=http://127.0.0.1:8879/callback  # must match the portal exactly
+export TWITTER_CLIENT_ID=your-client-id
+export TWITTER_CLIENT_SECRET=your-client-secret   # omit if your app is a public client
+export TWITTER_REDIRECT_URI=http://127.0.0.1:8879/callback  # must match the portal exactly
 ```
 
 If you're building from source, you can instead copy `.env.example` to `.env` and fill in the same values. Bun loads `.env` automatically for anything run with `bun` (`bun run auth`, `bun run dev`, `bun dist/index.js`). `.env` is gitignored, so your keys never get committed.
@@ -143,9 +143,9 @@ Add to your Cursor `mcp.json` (Settings → MCP, or `~/.cursor/mcp.json`). The s
       "command": "npx",
       "args": ["-y", "makers-page-mcp"],
       "env": {
-        "X_CLIENT_ID": "your-client-id",
-        "X_CLIENT_SECRET": "your-client-secret",
-        "X_REDIRECT_URI": "http://127.0.0.1:8879/callback"
+        "TWITTER_CLIENT_ID": "your-client-id",
+        "TWITTER_CLIENT_SECRET": "your-client-secret",
+        "TWITTER_REDIRECT_URI": "http://127.0.0.1:8879/callback"
       }
     }
   }
@@ -192,7 +192,7 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 
 | Tool | What it does |
 |------|--------------|
-| `create_draft` | Save a new draft post for X. Required: `{ channel: "x", text }`. Optional: `parts` (thread), `poll`, `mediaPaths` (absolute local paths, max 4), `quoteTweetId`, `communityId`, `shareWithFollowers`, `paidPartnership`. |
+| `create_draft` | Save a new draft post for X. Required: `{ channel: "x", text }`. Optional: `parts` (thread), `poll`, `mediaPaths` (absolute local paths, max 4), `quoteTweetId`, `communityId`, `shareWithFollowers`, `paidPartnership`, `allowLinksInMainPost`. **No http(s) links in the main post** — put URLs in `parts[1+]` unless the user explicitly forces `allowLinksInMainPost`. |
 | `list_drafts` | List drafts, optionally filtered by status (`draft`, `approved`, `rejected`, `publishing`, `published`, `deleted`). |
 | `get_draft` | Fetch a single draft by id. |
 | `update_draft` | Edit draft content (same fields as create; pass `null` to clear an optional field). Resets an approved or rejected draft back to `draft` so it can be re-approved. |
@@ -236,16 +236,18 @@ To reply in context: `list_dm_inbox` or `list_dm_conversation_events` → draft 
 
 | Field | Notes |
 |------|--------|
-| `text` | Post copy. Must equal `parts[0]` when `parts` is set. On `update_draft`, if both `text` and `parts` are sent and disagree, **`text` wins** and becomes `parts[0]`. |
-| `parts` | Thread of 2+ posts. Each part after the first replies to the previous one (standard X thread chain). Polls are not allowed on threads. |
+| `text` | Main post copy. Must equal `parts[0]` when `parts` is set. On `update_draft`, if both `text` and `parts` are sent and disagree, **`text` wins** and becomes `parts[0]`. **No http(s) URLs** unless `allowLinksInMainPost` is true. |
+| `parts` | Thread of 2+ posts. Each part after the first replies to the previous one (standard X thread chain). **Put every link in `parts[1+]`, never in the main post.** Polls are not allowed on threads. |
 | `poll` | `{ options: string[2..4], durationMinutes: 5..10080 }`. Mutually exclusive with `mediaPaths` and `quoteTweetId`. |
 | `mediaPaths` | Absolute local paths (`.jpg`/`.jpeg`/`.png`/`.webp`/`.gif`/`.mp4`), 1–4 files. Up to 4 images, or one GIF, or one video (no mixing). Symlinks are rejected; MIME/category is chosen from the **file extension** and verified with **magic-byte sniffing** before upload. Requires re-auth with `media.write` (see below). |
 | `quoteTweetId` | Quote another post. **Enterprise-only** on self-serve / pay-per-use X API tiers — the tool still sends it; X may reject. |
 | `communityId` / `shareWithFollowers` | Post to a Community; `shareWithFollowers` requires `communityId`. |
 | `paidPartnership` | Sets `paid_partnership: true` on create (and on edit when provided). |
+| `allowLinksInMainPost` | Opt out of the default ban on links in the main post. **Only when the user explicitly insists.** |
 
 ### Caveats (X product limits)
 
+- **Links in comments, not the main post:** By default, `create_draft` / `update_draft` / `edit_published_draft` reject `http://` or `https://` URLs in `text` / `parts[0]`. Put links in follow-up thread parts (`parts[1]`, `parts[2]`, …). Override only with `allowLinksInMainPost: true` when the user forces it.
 - **Re-auth for media:** OAuth scopes now include `media.write`. If you authorized before this change, run `makers-page-mcp-auth` / `bun run auth` once more.
 - **Re-auth for DMs:** OAuth scopes now include `dm.read` and `dm.write`. Re-run auth after upgrading to send or read DMs.
 - **Quote posts:** OpenAPI documents quote as Enterprise-only on self-serve; expect API errors on lower tiers.
@@ -272,9 +274,9 @@ Environment variables:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `X_CLIENT_ID` | *(none)* | Required. X OAuth 2.0 Client ID. |
-| `X_CLIENT_SECRET` | *(none)* | Set if your X app is a confidential client. |
-| `X_REDIRECT_URI` | `http://127.0.0.1:8879/callback` | Must match the callback registered in the X developer portal **and** use a loopback host (`127.0.0.1`, `localhost`, or `::1`). |
+| `TWITTER_CLIENT_ID` | *(none)* | Required. X/Twitter OAuth 2.0 Client ID. |
+| `TWITTER_CLIENT_SECRET` | *(none)* | Set if your X app is a confidential client. |
+| `TWITTER_REDIRECT_URI` | `http://127.0.0.1:8879/callback` | Must match the callback registered in the X developer portal **and** use a loopback host (`127.0.0.1`, `localhost`, or `::1`). |
 | `MAKERS_PAGE_CONFIG_DIR` | `~/.config/makers-page-mcp` | Where credentials are stored. |
 | `MAKERS_PAGE_DATA_DIR` | `~/.local/share/makers-page-mcp` | Where drafts are stored. |
 | `MAKERS_PAGE_REQUIRE_APPROVAL` | `true` | Set to `false` to let agents publish drafts without a separate approval step. |

@@ -324,6 +324,52 @@ describe("validateXDraft", () => {
     )
     expect(result).toEqual({ ok: true })
   })
+
+  test("rejects a link in a single-post main text", async () => {
+    const result = await validateXDraft(
+      { text: "Ship it https://makers.page" },
+      280,
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toContain("not allowed in the main post")
+      expect(result.error).toContain("allowLinksInMainPost")
+    }
+  })
+
+  test("rejects a link in parts[0] even when later parts also have links", async () => {
+    const result = await validateXDraft(
+      {
+        text: "Ship it https://makers.page",
+        parts: ["Ship it https://makers.page", "More https://example.com"],
+      },
+      280,
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain("not allowed in the main post")
+  })
+
+  test("allows links in parts[1+] when the main post has none", async () => {
+    const result = await validateXDraft(
+      {
+        text: "Ship it today",
+        parts: ["Ship it today", "Link: https://makers.page"],
+      },
+      280,
+    )
+    expect(result).toEqual({ ok: true })
+  })
+
+  test("allows a main-post link only when allowLinksInMainPost is true", async () => {
+    const result = await validateXDraft(
+      {
+        text: "Ship it https://makers.page",
+        allowLinksInMainPost: true,
+      },
+      280,
+    )
+    expect(result).toEqual({ ok: true })
+  })
 })
 
 describe("mergeDraftFields", () => {

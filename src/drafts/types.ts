@@ -24,6 +24,11 @@ export type Draft = {
   communityId?: string
   shareWithFollowers?: boolean
   paidPartnership?: boolean
+  /**
+   * Opt-out of the default rule: no http(s) links in the main post.
+   * Only set when the user explicitly insists on a link in parts[0]/text.
+   */
+  allowLinksInMainPost?: boolean
   externalIds?: string[]
   urls?: string[]
 }
@@ -38,6 +43,7 @@ export type CreateDraftInput = {
   communityId?: string
   shareWithFollowers?: boolean
   paidPartnership?: boolean
+  allowLinksInMainPost?: boolean
 }
 
 export type UpdateDraftInput = {
@@ -49,4 +55,5 @@ export type UpdateDraftInput = {
   communityId?: string | null
   shareWithFollowers?: boolean | null
   paidPartnership?: boolean | null
+  allowLinksInMainPost?: boolean | null
 }

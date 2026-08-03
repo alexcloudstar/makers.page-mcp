@@ -34,7 +34,10 @@ const pollSchema = z
   .meta({ description: "Attach a poll (mutually exclusive with mediaPaths and quoteTweetId)." })
 
 const draftContentFields = {
-  text: z.string().meta({ description: "The post copy (must equal parts[0] when parts is set)." }),
+  text: z.string().meta({
+    description:
+      "The main post copy (must equal parts[0] when parts is set). Do not put http(s) links here — put them in parts[1+].",
+  }),
   poll: pollSchema.optional(),
   mediaPaths: z
     .array(z.string())
@@ -51,7 +54,7 @@ const draftContentFields = {
     .optional()
     .meta({
       description:
-        "Thread parts (length >= 2). text must equal parts[0]. Polls are not allowed on threads.",
+        "Thread parts (length >= 2). text must equal parts[0]. Put every URL in parts[1], parts[2], … (never in the main post). Polls are not allowed on threads.",
     }),
   quoteTweetId: z
     .string()
@@ -69,6 +72,13 @@ const draftContentFields = {
     .boolean()
     .optional()
     .meta({ description: "Mark the post as a paid partnership." }),
+  allowLinksInMainPost: z
+    .boolean()
+    .optional()
+    .meta({
+      description:
+        "Opt out of the default no-links-in-main-post rule. Set true ONLY when the user explicitly insists on a URL in the main post (text / parts[0]). Default: false.",
+    }),
 }
 
 const nullablePoll = pollSchema.nullable().optional()
@@ -84,16 +94,28 @@ export const registerDraftTools = (server: McpServer, config: Config): void => {
       title: "Create draft post",
       description:
         "Create a draft social post for a channel (currently only \"x\"). Supports text, threads (parts), " +
-        "polls, media paths, quote, community, and paid partnership. The draft is saved locally and is NOT " +
-        "published until it is approved and then explicitly published.",
+        "polls, media paths, quote, community, and paid partnership. RULE: never put http(s) links in the " +
+        "main post (text / parts[0]) — put every URL in a follow-up thread part (parts[1], parts[2], …). " +
+        "Only set allowLinksInMainPost=true if the user explicitly forces a link in the main post. " +
+        "The draft is saved locally and is NOT published until it is approved and then explicitly published.",
       inputSchema: {
         channel: z.literal("x").meta({ description: "Target channel. Only \"x\" is supported today." }),
         ...draftContentFields,
       },
     },
     async (args) => {
-      const { channel, text, poll, mediaPaths, parts, quoteTweetId, communityId, shareWithFollowers, paidPartnership } =
-        args
+      const {
+        channel,
+        text,
+        poll,
+        mediaPaths,
+        parts,
+        quoteTweetId,
+        communityId,
+        shareWithFollowers,
+        paidPartnership,
+        allowLinksInMainPost,
+      } = args
       const input = {
         channel,
         text,
@@ -104,6 +126,7 @@ export const registerDraftTools = (server: McpServer, config: Config): void => {
         communityId,
         shareWithFollowers,
         paidPartnership,
+        allowLinksInMainPost,
       }
       const validation = await validateCreateDraftInput(input, config.maxPostLength)
       if (!validation.ok) return errorResult(validation.error)
@@ -158,8 +181,10 @@ export const registerDraftTools = (server: McpServer, config: Config): void => {
       title: "Update draft post",
       description:
         "Edit a draft's content (text, parts, poll, media, quote, community, paid partnership). " +
-        "Pass null to clear an optional field. If the draft was already approved, this resets it back to " +
-        '"draft" status so it must be re-approved before publishing. To change a live post, use edit_published_draft.',
+        "Same link rule as create_draft: no http(s) URLs in the main post unless allowLinksInMainPost is true " +
+        "(only when the user explicitly insists). Pass null to clear an optional field. If the draft was already " +
+        "approved, this resets it back to \"draft\" status so it must be re-approved before publishing. " +
+        "To change a live post, use edit_published_draft.",
       inputSchema: {
         id: z.string().meta({ description: "Draft id." }),
         text: z
@@ -167,7 +192,7 @@ export const registerDraftTools = (server: McpServer, config: Config): void => {
           .optional()
           .meta({
             description:
-              "New post copy. When parts is also set (or the draft is already a thread), text wins and becomes parts[0].",
+              "New main post copy (no http(s) links unless allowLinksInMainPost). When parts is also set (or the draft is already a thread), text wins and becomes parts[0].",
           }),
         poll: nullablePoll.meta({ description: "New poll, or null to clear." }),
         mediaPaths: z
@@ -182,16 +207,34 @@ export const registerDraftTools = (server: McpServer, config: Config): void => {
           .min(2)
           .nullable()
           .optional()
-          .meta({ description: "New thread parts, or null to clear." }),
+          .meta({
+            description:
+              "New thread parts, or null to clear. Put URLs in parts[1+] only.",
+          }),
         quoteTweetId: nullableString.meta({ description: "Quote tweet id, or null to clear." }),
         communityId: nullableString.meta({ description: "Community id, or null to clear." }),
         shareWithFollowers: nullableBoolean.meta({
           description: "Share with followers (requires communityId), or null to clear.",
         }),
         paidPartnership: nullableBoolean.meta({ description: "Paid partnership flag, or null to clear." }),
+        allowLinksInMainPost: nullableBoolean.meta({
+          description:
+            "Allow a URL in the main post (only if the user explicitly insists), or null to clear back to the default ban.",
+        }),
       },
     },
-    async ({ id, text, poll, mediaPaths, parts, quoteTweetId, communityId, shareWithFollowers, paidPartnership }) => {
+    async ({
+      id,
+      text,
+      poll,
+      mediaPaths,
+      parts,
+      quoteTweetId,
+      communityId,
+      shareWithFollowers,
+      paidPartnership,
+      allowLinksInMainPost,
+    }) => {
       return withDraftLock(id, async () => {
         let current: Draft
         try {
@@ -226,11 +269,12 @@ export const registerDraftTools = (server: McpServer, config: Config): void => {
           communityId,
           shareWithFollowers,
           paidPartnership,
+          allowLinksInMainPost,
         }
         const hasContentUpdate = Object.values(update).some((value) => value !== undefined)
         if (!hasContentUpdate) {
           return errorResult(
-            `update_draft requires at least one content field to change (text, parts, poll, mediaPaths, quoteTweetId, communityId, shareWithFollowers, or paidPartnership).`,
+            `update_draft requires at least one content field to change (text, parts, poll, mediaPaths, quoteTweetId, communityId, shareWithFollowers, paidPartnership, or allowLinksInMainPost).`,
           )
         }
         const merged = mergeDraftFields(current, update)

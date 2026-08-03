@@ -62,6 +62,33 @@ export const validateXPostText = (text: string, maxLength: number): ValidationRe
   return { ok: true }
 }
 
+/** True when the text contains an http(s) URL (same matcher used for t.co weighting). */
+export const containsHttpUrl = (text: string): boolean => {
+  // URL_RE is global — reset lastIndex so repeated calls stay correct.
+  URL_RE.lastIndex = 0
+  return URL_RE.test(text)
+}
+
+/**
+ * Default product rule: never put links in the main post (text / parts[0]).
+ * Links belong in follow-up thread parts (parts[1], parts[2], …) unless the
+ * user explicitly forces a main-post link via allowLinksInMainPost.
+ */
+export const validateMainPostLinks = (
+  text: string,
+  allowLinksInMainPost?: boolean,
+): ValidationResult => {
+  if (allowLinksInMainPost) return { ok: true }
+  if (!containsHttpUrl(text)) return { ok: true }
+  return {
+    ok: false,
+    error:
+      "Links are not allowed in the main post (text / parts[0]). " +
+      "Put every URL in a follow-up thread part (parts[1], parts[2], …) instead. " +
+      "Only set allowLinksInMainPost=true when the user explicitly insists on a link in the main post.",
+  }
+}
+
 export type MediaCategory = "tweet_image" | "tweet_gif" | "tweet_video"
 
 const MEDIA_LIMITS: Record<
@@ -288,15 +315,18 @@ export type XDraftFields = {
   communityId?: string
   shareWithFollowers?: boolean
   paidPartnership?: boolean
+  allowLinksInMainPost?: boolean
 }
 
 const validateDraftText = (
-  input: Pick<XDraftFields, "text" | "parts">,
+  input: Pick<XDraftFields, "text" | "parts" | "allowLinksInMainPost">,
   maxLength: number,
   hasPoll: boolean,
 ): ValidationResult => {
   if (input.parts === undefined) {
-    return validateXPostText(input.text, maxLength)
+    const textValidation = validateXPostText(input.text, maxLength)
+    if (!textValidation.ok) return textValidation
+    return validateMainPostLinks(input.text, input.allowLinksInMainPost)
   }
 
   if (input.parts.length < 2) {
@@ -318,7 +348,7 @@ const validateDraftText = (
     }
   }
 
-  return { ok: true }
+  return validateMainPostLinks(input.parts[0]!, input.allowLinksInMainPost)
 }
 
 export const validateXDraft = async (
@@ -377,6 +407,7 @@ export const mergeDraftFields = (
     | "communityId"
     | "shareWithFollowers"
     | "paidPartnership"
+    | "allowLinksInMainPost"
   >,
   update: UpdateDraftInput,
 ): XDraftFields => {
@@ -405,6 +436,10 @@ export const mergeDraftFields = (
     communityId: applyOptional(current.communityId, update.communityId),
     shareWithFollowers: applyOptional(current.shareWithFollowers, update.shareWithFollowers),
     paidPartnership: applyOptional(current.paidPartnership, update.paidPartnership),
+    allowLinksInMainPost: applyOptional(
+      current.allowLinksInMainPost,
+      update.allowLinksInMainPost,
+    ),
   }
 }
 
@@ -422,6 +457,7 @@ export const validateCreateDraftInput = async (
       communityId: input.communityId,
       shareWithFollowers: input.shareWithFollowers,
       paidPartnership: input.paidPartnership,
+      allowLinksInMainPost: input.allowLinksInMainPost,
     },
     maxLength,
   )

@@ -17,7 +17,12 @@ import {
   type CreateTweetInput,
   type CreatedTweet,
 } from "../channels/x/client.js"
-import { validateEditEligibility, validateMediaPaths, validateXPostText } from "../channels/x/validate.js"
+import {
+  validateEditEligibility,
+  validateMainPostLinks,
+  validateMediaPaths,
+  validateXPostText,
+} from "../channels/x/validate.js"
 import { NetworkError } from "../util/fetch-with-timeout.js"
 
 const textResult = (text: string): CallToolResult => ({
@@ -418,17 +423,29 @@ export const registerPublishTools = (server: McpServer, config: Config, deps: Pu
         "Edit the root post of a published draft via POST /2/tweets with edit_options.previous_post_id. " +
         "Requires X Premium; edits are limited (~30 minutes / 5 edits) and each edit creates a new post id " +
         "(stored locally). Re-attaches media (re-uploaded from mediaPaths) and quoteTweetId when present. " +
-        "Polls and community posts cannot be edited. Only the thread root is edited.",
+        "Polls and community posts cannot be edited. Only the thread root is edited. " +
+        "Same link rule: no http(s) URL in the root unless allowLinksInMainPost is true " +
+        "(or was already set on the draft) because the user explicitly insisted.",
       inputSchema: {
         id: z.string().meta({ description: "Draft id." }),
-        text: z.string().meta({ description: "New text for the root post." }),
+        text: z.string().meta({
+          description:
+            "New text for the root post. Do not put http(s) links here unless allowLinksInMainPost is true.",
+        }),
         paidPartnership: z
           .boolean()
           .optional()
           .meta({ description: "Optional paid partnership flag for the edited post." }),
+        allowLinksInMainPost: z
+          .boolean()
+          .optional()
+          .meta({
+            description:
+              "Allow a URL in the root post for this edit. Only when the user explicitly insists. Defaults to the draft's stored flag.",
+          }),
       },
     },
-    async ({ id, text, paidPartnership }) =>
+    async ({ id, text, paidPartnership, allowLinksInMainPost }) =>
       withDraftLock(id, async () => {
         let draft
         try {
@@ -443,6 +460,12 @@ export const registerPublishTools = (server: McpServer, config: Config, deps: Pu
 
         const textValidation = validateXPostText(text, config.maxPostLength)
         if (!textValidation.ok) return errorResult(textValidation.error)
+
+        const linkValidation = validateMainPostLinks(
+          text,
+          allowLinksInMainPost ?? draft.allowLinksInMainPost,
+        )
+        if (!linkValidation.ok) return errorResult(linkValidation.error)
 
         if (draft.mediaPaths && draft.mediaPaths.length > 0) {
           const mediaValidation = await validateMediaPaths(draft.mediaPaths)

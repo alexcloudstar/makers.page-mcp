@@ -23,14 +23,14 @@
           "isRequired": true,
           "format": "string",
           "isSecret": false,
-          "name": "X_CLIENT_ID"
+          "name": "TWITTER_CLIENT_ID"
         },
         {
           "description": "X (Twitter) OAuth 2.0 Client Secret (only required for confidential clients)",
           "isRequired": false,
           "format": "string",
           "isSecret": true,
-          "name": "X_CLIENT_SECRET"
+          "name": "TWITTER_CLIENT_SECRET"
         },
         {
           "description": "OAuth redirect URI (loopback only: 127.0.0.1, localhost, or ::1). Must exactly match the callback registered in the X developer portal.",
@@ -38,7 +38,7 @@
           "format": "string",
           "isSecret": false,
           "default": "http://127.0.0.1:8879/callback",
-          "name": "X_REDIRECT_URI"
+          "name": "TWITTER_REDIRECT_URI"
         }
       ]
     }

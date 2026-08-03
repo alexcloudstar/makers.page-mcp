@@ -93,6 +93,7 @@ export class DraftStore {
     if (input.communityId) draft.communityId = input.communityId
     if (input.shareWithFollowers !== undefined) draft.shareWithFollowers = input.shareWithFollowers
     if (input.paidPartnership !== undefined) draft.paidPartnership = input.paidPartnership
+    if (input.allowLinksInMainPost) draft.allowLinksInMainPost = true
     await this.write(draft)
     return draft
   }
@@ -175,6 +176,7 @@ export class DraftStore {
     clearOrSet(draft, "communityId", input.communityId)
     clearOrSet(draft, "shareWithFollowers", input.shareWithFollowers)
     clearOrSet(draft, "paidPartnership", input.paidPartnership)
+    clearOrSet(draft, "allowLinksInMainPost", input.allowLinksInMainPost)
 
     if (draft.parts !== undefined && input.text === undefined) {
       draft.text = draft.parts[0]!
