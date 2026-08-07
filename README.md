@@ -217,6 +217,7 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 | `get_x_post_metrics` | Fetch impressions, likes, reposts, replies, quotes, and bookmarks for up to 100 post ids. |
 | `get_x_account_summary` | Calendar-day impressions and engagements via `GET /2/tweets/analytics` (aligned with x.com account analytics). Period totals and top posts for the window. |
 | `analyze_x_posting_times` | Hour-of-day analysis: avg impressions and engagement rate by when you posted. |
+| `be_trendy` | Discover what's trending right now on X within a specific product niche, via X Recent Search scoped to the niche/keywords, not X's generic global trending list. Required: `productName`, `productDescription`, `niche`, `targetAudience`. Optional: `keywords`, `language`. Filters spam and near-duplicates, then returns scored `trendingTopics` (with sample tweets and engagement numbers), `painPointSignals` (demand-signal posts asking for recommendations/alternatives), and a post-timing `recommendation`. Does not generate content itself, use the returned data plus the product's context to write the actual post. |
 | `create_retweet_draft` | Save a draft retweet or undo-retweet for a post id. Not executed until approved. |
 | `list_retweet_drafts` | List retweet/undo drafts, optionally filtered by status. |
 | `get_retweet_draft` | Fetch a single retweet/undo draft by id. |
@@ -231,6 +232,8 @@ Typical retweet flow: `create_retweet_draft` → user approves → `approve_retw
 Typical DM flow: `lookup_x_user` (optional) → `create_dm_draft` → user approves → `approve_dm_draft` → `send_dm_draft`.
 
 To reply in context: `list_dm_inbox` or `list_dm_conversation_events` → draft with `conversationId` → approve → send.
+
+Typical trend-discovery flow: `be_trendy` → agent writes a post from the returned `trendingTopics`/`painPointSignals` → `create_draft` → user approves → `publish_draft`.
 
 ### X create/update fields
 
@@ -254,6 +257,7 @@ To reply in context: `list_dm_inbox` or `list_dm_conversation_events` → draft 
 - **Edit:** Requires **X Premium**, roughly a **30-minute** window and **up to 5 edits** from the original. Each edit returns a **new post id** (we update the local draft). Polls and community posts are not editable.
 - **Replies:** Self-serve apps can create **self-threads** (reply to your own previous part). Replies to *other* accounts are blocked unless summoned.
 - **Cashtags:** Self-serve allows **at most one cashtag** (`$TICKER`) per post.
+- **`be_trendy` requires a paid API tier:** it calls X's Recent Search endpoint, which needs at least a **Basic** paid X API access tier. A Free-tier app will get 403/429 errors.
 
 ## If a publish attempt fails ambiguously
 
@@ -296,6 +300,7 @@ Destination: **one local indie stack MCP** that already knows the founder tools 
 - X DMs: draft → approve → send (1:1 text, media attachment, group conversations) with local rate limits; read inbox and thread events; `@handle` lookup.
 - X analytics (read-only): post metrics, account summary (today + top posts), posting-time analysis. No local DB; fetches from X API on demand.
 - X retweets: draft → approve → `retweet_post` / `undo_retweet` (immediate; no scheduling).
+- `be_trendy`: niche-scoped X trend discovery via Recent Search, spam/duplicate filtering, and scored trending topics + demand-signal posts to ground content the agent writes (no LLM call inside the tool itself).
 
 **Next**
 
