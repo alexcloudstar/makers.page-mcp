@@ -79,7 +79,7 @@ describe("be_trendy tool", () => {
     const result = await server.call("be_trendy", baseArgs)
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse(textOf(result)) as { trendingTopics: Array<{ topic: string }> }
-    expect(parsed.trendingTopics[0].topic).toBe("#BuildInPublic")
+    expect(parsed.trendingTopics[0]!.topic).toBe("#BuildInPublic")
   })
 
   test("returns a clean error when no signals are found", async () => {

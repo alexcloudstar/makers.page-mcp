@@ -26,14 +26,14 @@ describe("scoreTrends", () => {
     const topics = scoreTrends([...popular, ...rare], now)
 
     expect(topics.length).toBe(2)
-    expect(topics[0].topic).toBe("#PopularTool")
-    expect(topics[0].score).toBe(90)
-    expect(topics[0].tweetCount).toBe(4)
-    expect(topics[0].confidence).toBe(80)
-    expect(topics[0].growth).toBe("exploding")
-    expect(topics[1].topic).toBe("#RareThing")
-    expect(topics[1].score).toBe(10)
-    expect(topics[1].growth).toBe("fading")
+    expect(topics[0]!.topic).toBe("#PopularTool")
+    expect(topics[0]!.score).toBe(90)
+    expect(topics[0]!.tweetCount).toBe(4)
+    expect(topics[0]!.confidence).toBe(80)
+    expect(topics[0]!.growth).toBe("exploding")
+    expect(topics[1]!.topic).toBe("#RareThing")
+    expect(topics[1]!.score).toBe(10)
+    expect(topics[1]!.growth).toBe("fading")
   })
 
   test("weights recent engagement higher than older engagement (same frequency and totals)", () => {
@@ -49,12 +49,12 @@ describe("scoreTrends", () => {
 
     const topics = scoreTrends([...recent, ...old], now)
 
-    expect(topics[0].topic).toBe("#TopicA")
-    expect(topics[0].score).toBe(100)
-    expect(topics[0].growth).toBe("exploding")
-    expect(topics[1].topic).toBe("#TopicB")
-    expect(topics[1].score).toBe(70)
-    expect(topics[1].growth).toBe("fading")
+    expect(topics[0]!.topic).toBe("#TopicA")
+    expect(topics[0]!.score).toBe(100)
+    expect(topics[0]!.growth).toBe("exploding")
+    expect(topics[1]!.topic).toBe("#TopicB")
+    expect(topics[1]!.score).toBe(70)
+    expect(topics[1]!.growth).toBe("fading")
   })
 
   test("excludes topics mentioned only once", () => {
@@ -77,6 +77,6 @@ describe("scoreTrends", () => {
       Array.from({ length: 2 }, () => signal({ text: "#SomeTopic" })),
       new Date(),
     )
-    expect(topics[0].alsoTrendingGlobally).toBe(false)
+    expect(topics[0]!.alsoTrendingGlobally).toBe(false)
   })
 })

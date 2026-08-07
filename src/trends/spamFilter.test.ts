@@ -41,7 +41,7 @@ describe("dedupeNearDuplicates", () => {
     const high = signal({ id: "2", text: "check out my new ai tool for founders", metrics: { likes: 50, reposts: 10, replies: 5, quotes: 2 } })
     const result = dedupeNearDuplicates([low, high])
     expect(result.length).toBe(1)
-    expect(result[0].id).toBe("2")
+    expect(result[0]!.id).toBe("2")
   })
 
   test("keeps distinct posts separate", () => {
@@ -58,6 +58,6 @@ describe("filterSpamAndDuplicates", () => {
     const legit = signal({ id: "2", text: "Shipped a new dashboard for indie hackers today" })
     const result = filterSpamAndDuplicates([spam, legit])
     expect(result.length).toBe(1)
-    expect(result[0].id).toBe("2")
+    expect(result[0]!.id).toBe("2")
   })
 })
