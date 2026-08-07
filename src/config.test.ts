@@ -1,16 +1,23 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { DEFAULT_MAX_POST_LENGTH, resolveMaxPostLength } from "./config.js"
 
 const ENV_KEY = "MAKERS_PAGE_MAX_POST_LENGTH"
 let original: string | undefined
 
+// The invalid-value tests below intentionally trigger the production
+// console.warn fallback path. Silence it so that expected, already-asserted
+// -on logging doesn't print as noise in the test run.
+let consoleWarnSpy: ReturnType<typeof spyOn>
+
 beforeEach(() => {
   original = process.env[ENV_KEY]
+  consoleWarnSpy = spyOn(console, "warn").mockImplementation(() => {})
 })
 
 afterEach(() => {
   if (original === undefined) delete process.env[ENV_KEY]
   else process.env[ENV_KEY] = original
+  consoleWarnSpy.mockRestore()
 })
 
 describe("resolveMaxPostLength", () => {

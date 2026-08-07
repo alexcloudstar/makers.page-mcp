@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -77,14 +77,22 @@ let draftsDir: string
 let store: DraftStore
 let config: Config
 
+// Several tests below intentionally trigger production error-logging paths
+// (network errors, disk-full simulations) to verify draft-state handling.
+// Silence console.error so that expected, already-asserted-on logging
+// doesn't print as noise in the test run.
+let consoleErrorSpy: ReturnType<typeof spyOn>
+
 beforeEach(async () => {
   draftsDir = await mkdtemp(path.join(os.tmpdir(), "publish-test-"))
   store = new DraftStore({ draftsDir })
   config = { requireApproval: true, maxPostLength: 280 } as Config
+  consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {})
 })
 
 afterEach(async () => {
   await rm(draftsDir, { recursive: true, force: true })
+  consoleErrorSpy.mockRestore()
 })
 
 const registerTools = (xClient: FakeXClient, cfg: Config = config, storeOverride?: typeof store) => {
