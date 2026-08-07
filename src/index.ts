@@ -10,6 +10,7 @@ import { registerAccountTools } from "./tools/account.js"
 import { registerDmTools } from "./tools/dm.js"
 import { registerAnalyticsTools } from "./tools/analytics.js"
 import { registerRetweetTools } from "./tools/retweet.js"
+import { registerTrendTools } from "./tools/trend.js"
 
 // Read the version from package.json at runtime (via createRequire, since it lives
 // outside rootDir and can't be a static import) so it can't drift from the published version.
@@ -31,6 +32,7 @@ const main = async () => {
   registerDmTools(server, config)
   registerAnalyticsTools(server, config)
   registerRetweetTools(server, config)
+  registerTrendTools(server, config)
 
   const transport = new StdioServerTransport()
   await server.connect(transport)
