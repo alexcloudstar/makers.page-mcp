@@ -1,8 +1,17 @@
 import { resolveTargetDay } from "./dateRange.js"
+import { buildDefaultSpotlightPost } from "./template.js"
 import type { InteractionType, Supporter, SupporterSource, SupporterSpotlightResult, SupporterUser } from "./types.js"
 import { NoPostsYesterdayError } from "./types.js"
 
-const MAX_POSTS_PER_DAY = 5
+// A safety ceiling against a runaway pagination loop, not a business cap — every post
+// from the target day is scanned, however many there are.
+const MAX_POSTS_TO_SCAN = 500
+
+const POINTS_PER_LIKE = 1
+const POINTS_PER_REPLY = 3
+// Rewards supporters who engaged in more than one way (liked AND replied), not just
+// volume in a single interaction type.
+const BONUS_FOR_BOTH_INTERACTION_TYPES = 2
 
 export type SupporterSpotlightInput = {
   date?: string
@@ -17,9 +26,29 @@ const addInteraction = (supporters: Map<string, Supporter>, user: SupporterUser,
   const existing = supporters.get(user.id)
   if (existing) {
     if (!existing.interactions.includes(type)) existing.interactions.push(type)
+    if (type === "like") existing.likeCount += 1
+    else existing.replyCount += 1
     return
   }
-  supporters.set(user.id, { id: user.id, username: user.username, name: user.name, interactions: [type] })
+  supporters.set(user.id, {
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    interactions: [type],
+    likeCount: type === "like" ? 1 : 0,
+    replyCount: type === "reply" ? 1 : 0,
+    score: 0,
+  })
+}
+
+const scoreAndRank = (supporters: Supporter[]): Supporter[] => {
+  for (const supporter of supporters) {
+    supporter.score =
+      supporter.likeCount * POINTS_PER_LIKE +
+      supporter.replyCount * POINTS_PER_REPLY +
+      (supporter.likeCount > 0 && supporter.replyCount > 0 ? BONUS_FOR_BOTH_INTERACTION_TYPES : 0)
+  }
+  return supporters.sort((a, b) => b.score - a.score || a.username.localeCompare(b.username))
 }
 
 export const runSupporterSpotlight = async (
@@ -29,7 +58,7 @@ export const runSupporterSpotlight = async (
   const { dateKey, startIso, endIso } = resolveTargetDay(input.date)
 
   const me = await deps.getMe()
-  const posts = await deps.supporterSource.fetchRecentPosts(me.id, { startIso, endIso }, MAX_POSTS_PER_DAY)
+  const posts = await deps.supporterSource.fetchRecentPosts(me.id, { startIso, endIso }, MAX_POSTS_TO_SCAN)
   if (posts.length === 0) throw new NoPostsYesterdayError()
 
   const fetches = posts.flatMap((post) => [
@@ -53,5 +82,8 @@ export const runSupporterSpotlight = async (
     }
   }
 
-  return { date: dateKey, supporters: [...supporters.values()] }
+  const supporterList = scoreAndRank([...supporters.values()])
+  const generatedPost = supporterList.length > 0 ? buildDefaultSpotlightPost(dateKey, supporterList) : ""
+
+  return { date: dateKey, supporters: supporterList, generatedPost }
 }

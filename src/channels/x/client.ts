@@ -148,6 +148,10 @@ const formatAnalyticsTime = (iso: string): string => iso.replace(/\.\d{3}Z$/, "Z
 
 const TWEET_METRICS_FIELDS = "tweet.fields=created_at,text,public_metrics"
 
+// A safety ceiling against a runaway pagination loop, not a business cap — no realistic
+// indie-founder post gets anywhere close to this many distinct liking users.
+const MAX_LIKING_USERS = 5_000
+
 const buildDmMessageBody = (input: CreateDmMessageInput): Record<string, unknown> => {
   const body: Record<string, unknown> = { text: input.text }
   if (input.mediaIds && input.mediaIds.length > 0) {
@@ -798,19 +802,34 @@ export class XClient {
     return { tweets, nextToken: result.meta?.next_token }
   }
 
-  async getLikingUsers(tweetId: string, maxResults = 100): Promise<XUser[]> {
-    const capped = Math.min(Math.max(maxResults, 1), 100)
-    const result = await this.request<{
-      data?: Array<{ id: string; username: string; name?: string }>
-    }>(
-      `/2/tweets/${encodeURIComponent(tweetId)}/liking_users?max_results=${capped}&user.fields=username,name`,
-      { method: "GET" },
-    )
-    return (result.data ?? []).map((user) => ({
-      id: user.id,
-      username: user.username,
-      name: user.name ?? user.username,
-    }))
+  /** Paginates through every page so callers get every liking user, not just the first 100. */
+  async getLikingUsers(tweetId: string, maxUsers = MAX_LIKING_USERS): Promise<XUser[]> {
+    const collected: XUser[] = []
+    let paginationToken: string | undefined
+
+    while (collected.length < maxUsers) {
+      const pageSize = Math.min(100, maxUsers - collected.length)
+      const params = new URLSearchParams()
+      params.set("max_results", String(pageSize))
+      params.set("user.fields", "username,name")
+      if (paginationToken) params.set("pagination_token", paginationToken)
+
+      const result = await this.request<{
+        data?: Array<{ id: string; username: string; name?: string }>
+        meta?: { next_token?: string }
+      }>(`/2/tweets/${encodeURIComponent(tweetId)}/liking_users?${params.toString()}`, { method: "GET" })
+
+      const page = (result.data ?? []).map((user) => ({
+        id: user.id,
+        username: user.username,
+        name: user.name ?? user.username,
+      }))
+      collected.push(...page)
+      if (!result.meta?.next_token || page.length === 0) break
+      paginationToken = result.meta.next_token
+    }
+
+    return collected.slice(0, maxUsers)
   }
 
   async getTrendsByWoeid(woeid: number, maxTrends = 20): Promise<XTrend[]> {

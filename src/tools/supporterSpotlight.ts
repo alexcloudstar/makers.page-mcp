@@ -50,13 +50,14 @@ export const registerSupporterSpotlightTools = (
     {
       title: "Supporter Spotlight",
       description:
-        "Turn yesterday's engagement into today's relationships. Fetches the people who liked or replied to your X posts " +
-        "from the previous calendar day, dedupes them, and excludes your own account. Only likes and replies count " +
-        "(reposts and quote tweets are ignored); no scoring, ranking, or profiles — just the list. Always fetches live " +
-        "from X (nothing is cached or stored). This tool does not generate content itself: use the returned supporters " +
-        "to write a short, friendly, authentic thank-you post that mentions a handful of them by @username (avoid " +
-        "excessive emojis and robotic phrasing — pick who to mention yourself). Nothing is ever auto-published; hand " +
-        "the finished text to create_draft if you want it to go out as a real post.",
+        "Turn yesterday's engagement into today's relationships. Fetches every person who liked or replied to your X " +
+        "posts from the previous calendar day (no cap — every post, every liker, every reply), dedupes them, and " +
+        "excludes your own account. Only likes and replies count (reposts and quote tweets are ignored). Each " +
+        "supporter gets an engagement score (like = 1pt, reply = 3pts, +2 bonus for doing both) and the list is " +
+        "ranked highest-first. Always fetches live from X (nothing is cached or stored). generatedPost is a ready-to-" +
+        "post draft built from a fixed template (not AI-written) mentioning every supporter by @username, in ranked " +
+        "order — edit it freely, or leave it as-is. Nothing is ever auto-published; hand the finished text to " +
+        "create_draft if you want it to go out as a real post.",
       inputSchema: {
         date: z
           .string()

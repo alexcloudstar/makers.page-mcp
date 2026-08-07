@@ -5,11 +5,15 @@ export type Supporter = {
   username: string
   name?: string
   interactions: InteractionType[]
+  likeCount: number
+  replyCount: number
+  score: number
 }
 
 export type SupporterSpotlightResult = {
   date: string
   supporters: Supporter[]
+  generatedPost: string
 }
 
 export type RecentPost = {
@@ -29,6 +33,7 @@ export interface SupporterSource {
     maxPosts: number,
   ): Promise<RecentPost[]>
   fetchLikers(postId: string): Promise<SupporterUser[]>
+  /** May return the same author more than once — each occurrence is a separate interaction to score. */
   fetchReplyAuthors(postId: string, excludeAuthorId: string): Promise<SupporterUser[]>
 }
 

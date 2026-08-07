@@ -209,4 +209,25 @@ describe("XClient analytics", () => {
     ])
   })
 
+  test("getLikingUsers paginates through every page instead of stopping at the first 100", async () => {
+    let calls = 0
+    globalThis.fetch = (async (input) => {
+      calls += 1
+      const url = String(input)
+      if (calls === 1) {
+        return new Response(
+          JSON.stringify({ data: [{ id: "1", username: "alice" }], meta: { next_token: "token-2" } }),
+          { status: 200 },
+        )
+      }
+      expect(url).toContain("pagination_token=token-2")
+      return new Response(JSON.stringify({ data: [{ id: "2", username: "bob" }] }), { status: 200 })
+    }) as typeof fetch
+
+    const client = withMockedAuth(new XClient(config))
+    const users = await client.getLikingUsers("10")
+    expect(calls).toBe(2)
+    expect(users.map((u) => u.id)).toEqual(["1", "2"])
+  })
+
 })

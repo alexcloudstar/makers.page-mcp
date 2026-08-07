@@ -1,8 +1,8 @@
 import type { XClient } from "../channels/x/client.js"
 import type { RecentPost, SupporterSource, SupporterUser } from "./types.js"
 
-const MAX_LIKERS_PER_POST = 100
-const MAX_REPLY_AUTHORS_PER_POST = 100
+// A safety ceiling against a runaway pagination loop, not a business cap.
+const MAX_REPLY_TWEETS_PER_POST = 5_000
 
 export class XSupporterSource implements SupporterSource {
   constructor(private readonly xClient: XClient) {}
@@ -17,24 +17,31 @@ export class XSupporterSource implements SupporterSource {
   }
 
   async fetchLikers(postId: string): Promise<SupporterUser[]> {
-    const users = await this.xClient.getLikingUsers(postId, MAX_LIKERS_PER_POST)
+    const users = await this.xClient.getLikingUsers(postId)
     return users.map((user) => ({ id: user.id, username: user.username, name: user.name }))
   }
 
+  /**
+   * One entry per matching reply tweet (not deduped) — if the same person replies
+   * more than once, each reply should count toward their engagement score.
+   */
   async fetchReplyAuthors(postId: string, excludeAuthorId: string): Promise<SupporterUser[]> {
-    const { tweets } = await this.xClient.searchRecentTweets(`conversation_id:${postId}`, {
-      maxResults: MAX_REPLY_AUTHORS_PER_POST,
-    })
-
-    const seen = new Set<string>()
     const authors: SupporterUser[] = []
-    for (const tweet of tweets) {
-      if (tweet.id === postId) continue
-      if (!tweet.authorId || tweet.authorId === excludeAuthorId) continue
-      if (seen.has(tweet.authorId)) continue
-      seen.add(tweet.authorId)
-      authors.push({ id: tweet.authorId, username: tweet.authorUsername ?? tweet.authorId })
-    }
+    let nextToken: string | undefined
+
+    do {
+      const { tweets, nextToken: token } = await this.xClient.searchRecentTweets(`conversation_id:${postId}`, {
+        maxResults: 100,
+        nextToken,
+      })
+      for (const tweet of tweets) {
+        if (tweet.id === postId) continue
+        if (!tweet.authorId || tweet.authorId === excludeAuthorId) continue
+        authors.push({ id: tweet.authorId, username: tweet.authorUsername ?? tweet.authorId })
+      }
+      nextToken = token
+    } while (nextToken && authors.length < MAX_REPLY_TWEETS_PER_POST)
+
     return authors
   }
 }
