@@ -52,7 +52,7 @@ describe("runTrendPipeline", () => {
     expect(result.query.niche).toBe("indie hackers")
     expect(result.query.searchQueriesUsed.length).toBeGreaterThan(0)
     expect(result.trendingTopics.length).toBeGreaterThan(0)
-    expect(result.trendingTopics[0].topic).toBe("#BuildInPublic")
+    expect(result.trendingTopics[0]!.topic).toBe("#BuildInPublic")
     expect(result.painPointSignals.length).toBe(1)
     expect(result.recommendation.urgency).toBeDefined()
   })
@@ -103,6 +103,6 @@ describe("runTrendPipeline", () => {
       xClient: stubXClient,
     })
 
-    expect(result.trendingTopics[0].alsoTrendingGlobally).toBe(true)
+    expect(result.trendingTopics[0]!.alsoTrendingGlobally).toBe(true)
   })
 })

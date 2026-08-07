@@ -21,14 +21,14 @@ describe("extractPainPointSignals", () => {
     ]
     const result = extractPainPointSignals(signals)
     expect(result.length).toBe(1)
-    expect(result[0].text).toContain("Looking for")
+    expect(result[0]!.text).toContain("Looking for")
   })
 
   test("ranks matches by engagement, highest first", () => {
     const low = signal({ text: "Anyone know a good tool for this?", metrics: { likes: 1, reposts: 0, replies: 0, quotes: 0 } })
     const high = signal({ text: "Anyone recommend a good tool for indie hackers?", metrics: { likes: 50, reposts: 10, replies: 5, quotes: 2 } })
     const result = extractPainPointSignals([low, high])
-    expect(result[0].text).toBe(high.text)
+    expect(result[0]!.text).toBe(high.text)
   })
 
   test("caps the result at 10 entries", () => {

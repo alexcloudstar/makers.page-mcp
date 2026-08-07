@@ -33,7 +33,7 @@ describe("buildSearchQueries", () => {
 
   test("deduplicates case-insensitive duplicate terms", () => {
     const queries = buildSearchQueries(baseInput({ keywords: ["Indie Hackers", "INDIE HACKERS"] }))
-    const broadQuery = queries[0]
+    const broadQuery = queries[0]!
     expect(broadQuery.toLowerCase().match(/indie hackers/g)?.length).toBe(1)
   })
 

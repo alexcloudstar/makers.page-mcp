@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-07
+
 ### Added
 
 - `be_trendy`: discovers what's trending on X within a specific product niche via X Recent Search (not X's generic global trending list), filters spam/near-duplicates, and returns algorithmically scored trending topics with real sample tweets plus demand-signal posts. Does not call any LLM itself; the calling MCP client's own model writes the actual content from the returned data.
@@ -85,7 +87,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - OAuth 2.0 (PKCE) authorization flow for connecting an X account.
 - Local, file-based draft storage with an approval gate before publishing.
 
-[Unreleased]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.0...v0.1.1
