@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -45,6 +45,12 @@ let dmDraftsDir: string
 let dataDir: string
 let config: Config
 
+// The "local record update failed" test below intentionally triggers a
+// production error-logging path to verify state handling when the send
+// succeeds but persistence fails. Silence console.error so that expected,
+// already-asserted-on logging doesn't print as noise in the test run.
+let consoleErrorSpy: ReturnType<typeof spyOn>
+
 beforeEach(async () => {
   dataDir = await mkdtemp(path.join(os.tmpdir(), "dm-tools-data-"))
   dmDraftsDir = path.join(dataDir, "dm-drafts")
@@ -55,10 +61,12 @@ beforeEach(async () => {
     maxDmLength: 10_000,
     dmRateLimit: { maxPerHour: 10, maxPerDay: 50, minIntervalMs: 0 },
   } as Config
+  consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {})
 })
 
 afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true })
+  consoleErrorSpy.mockRestore()
 })
 
 describe("send_dm_draft", () => {

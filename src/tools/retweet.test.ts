@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -39,8 +39,19 @@ const setup = async () => {
   } as Config
 }
 
+// The "local record update failed" test below intentionally triggers a
+// production error-logging path to verify state handling when the action
+// succeeds but persistence fails. Silence console.error so that expected,
+// already-asserted-on logging doesn't print as noise in the test run.
+let consoleErrorSpy: ReturnType<typeof spyOn>
+
+beforeEach(() => {
+  consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {})
+})
+
 afterEach(async () => {
   if (dataDir) await rm(dataDir, { recursive: true, force: true })
+  consoleErrorSpy.mockRestore()
 })
 
 describe("retweet_post", () => {
