@@ -798,6 +798,21 @@ export class XClient {
     return { tweets, nextToken: result.meta?.next_token }
   }
 
+  async getLikingUsers(tweetId: string, maxResults = 100): Promise<XUser[]> {
+    const capped = Math.min(Math.max(maxResults, 1), 100)
+    const result = await this.request<{
+      data?: Array<{ id: string; username: string; name?: string }>
+    }>(
+      `/2/tweets/${encodeURIComponent(tweetId)}/liking_users?max_results=${capped}&user.fields=username,name`,
+      { method: "GET" },
+    )
+    return (result.data ?? []).map((user) => ({
+      id: user.id,
+      username: user.username,
+      name: user.name ?? user.username,
+    }))
+  }
+
   async getTrendsByWoeid(woeid: number, maxTrends = 20): Promise<XTrend[]> {
     const capped = Math.min(Math.max(maxTrends, 1), 50)
     const result = await this.request<{

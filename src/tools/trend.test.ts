@@ -31,6 +31,7 @@ const config = {
   draftsDir: "/tmp/makers-page-mcp-test-drafts",
   dmDraftsDir: "/tmp/makers-page-mcp-test-dm-drafts",
   retweetDraftsDir: "/tmp/makers-page-mcp-test-retweet-drafts",
+  spotlightsDir: "/tmp/makers-page-mcp-test-spotlights",
   credentialsPath: "/tmp/makers-page-mcp-test-config/credentials.json",
   requireApproval: true,
   maxPostLength: 280,

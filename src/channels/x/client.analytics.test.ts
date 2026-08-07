@@ -14,6 +14,7 @@ const config = {
   draftsDir: "/tmp/makers-page-mcp-test-drafts",
   dmDraftsDir: "/tmp/makers-page-mcp-test-dm-drafts",
   retweetDraftsDir: "/tmp/makers-page-mcp-test-retweet-drafts",
+  spotlightsDir: "/tmp/makers-page-mcp-test-spotlights",
   credentialsPath: "/tmp/makers-page-mcp-test-config/credentials.json",
   requireApproval: true,
   maxPostLength: 280,
@@ -182,6 +183,31 @@ describe("XClient analytics", () => {
       "total",
     )
     expect(rows[0]?.timestampedMetrics[0]?.metrics.impressions).toBe(42)
+  })
+
+  test("getLikingUsers requests liking_users and maps user fields", async () => {
+    let url = ""
+    globalThis.fetch = (async (input) => {
+      url = String(input)
+      return new Response(
+        JSON.stringify({
+          data: [
+            { id: "1", username: "alice", name: "Alice" },
+            { id: "2", username: "bob" },
+          ],
+        }),
+        { status: 200 },
+      )
+    }) as typeof fetch
+
+    const client = withMockedAuth(new XClient(config))
+    const users = await client.getLikingUsers("10", 50)
+    expect(url).toContain("/2/tweets/10/liking_users")
+    expect(url).toContain("max_results=50")
+    expect(users).toEqual([
+      { id: "1", username: "alice", name: "Alice" },
+      { id: "2", username: "bob", name: "bob" },
+    ])
   })
 
 })
