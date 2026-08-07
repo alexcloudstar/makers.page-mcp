@@ -1,24 +1,15 @@
 import { resolveTargetDay } from "./dateRange.js"
-import type {
-  InteractionType,
-  SpotlightStorage,
-  Supporter,
-  SupporterSource,
-  SupporterSpotlightResult,
-  SupporterUser,
-} from "./types.js"
-import { NoPostsYesterdayError, SpotlightNotFoundError } from "./types.js"
+import type { InteractionType, Supporter, SupporterSource, SupporterSpotlightResult, SupporterUser } from "./types.js"
+import { NoPostsYesterdayError } from "./types.js"
 
 const MAX_POSTS_PER_DAY = 5
 
 export type SupporterSpotlightInput = {
   date?: string
-  generatedPost?: string
 }
 
 export type SupporterSpotlightDeps = {
   supporterSource: SupporterSource
-  store: SpotlightStorage
   getMe: () => Promise<{ id: string }>
 }
 
@@ -36,17 +27,6 @@ export const runSupporterSpotlight = async (
   deps: SupporterSpotlightDeps,
 ): Promise<SupporterSpotlightResult> => {
   const { dateKey, startIso, endIso } = resolveTargetDay(input.date)
-
-  if (input.generatedPost !== undefined) {
-    const updated = await deps.store.setGeneratedPost(dateKey, input.generatedPost)
-    if (!updated) throw new SpotlightNotFoundError(dateKey)
-    return { date: dateKey, supporters: updated.supporters, generatedPost: updated.generatedPost }
-  }
-
-  const cached = await deps.store.get(dateKey)
-  if (cached) {
-    return { date: dateKey, supporters: cached.supporters, generatedPost: cached.generatedPost }
-  }
 
   const me = await deps.getMe()
   const posts = await deps.supporterSource.fetchRecentPosts(me.id, { startIso, endIso }, MAX_POSTS_PER_DAY)
@@ -73,8 +53,5 @@ export const runSupporterSpotlight = async (
     }
   }
 
-  const supporterList = [...supporters.values()]
-  await deps.store.save(dateKey, supporterList)
-
-  return { date: dateKey, supporters: supporterList, generatedPost: "" }
+  return { date: dateKey, supporters: [...supporters.values()] }
 }

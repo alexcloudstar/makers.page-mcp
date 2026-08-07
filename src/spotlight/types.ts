@@ -10,7 +10,6 @@ export type Supporter = {
 export type SupporterSpotlightResult = {
   date: string
   supporters: Supporter[]
-  generatedPost: string
 }
 
 export type RecentPost = {
@@ -33,31 +32,9 @@ export interface SupporterSource {
   fetchReplyAuthors(postId: string, excludeAuthorId: string): Promise<SupporterUser[]>
 }
 
-export type StoredSpotlight = {
-  date: string
-  supporters: Supporter[]
-  generatedPost: string
-}
-
-export interface SpotlightStorage {
-  get(dateKey: string): Promise<StoredSpotlight | undefined>
-  save(dateKey: string, supporters: Supporter[]): Promise<StoredSpotlight>
-  setGeneratedPost(dateKey: string, generatedPost: string): Promise<StoredSpotlight | undefined>
-}
-
 export class NoPostsYesterdayError extends Error {
   constructor(message = "No posts were found for the target day, so there's nothing to spotlight yet.") {
     super(message)
     this.name = "NoPostsYesterdayError"
-  }
-}
-
-export class SpotlightNotFoundError extends Error {
-  constructor(dateKey: string) {
-    super(
-      `No spotlight has been fetched for ${dateKey} yet. Call supporter_spotlight with just { date } first, ` +
-        "then call it again with your drafted generatedPost.",
-    )
-    this.name = "SpotlightNotFoundError"
   }
 }
