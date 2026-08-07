@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `be_trendy`: discovers what's trending on X within a specific product niche via X Recent Search (not X's generic global trending list), filters spam/near-duplicates, and returns algorithmically scored trending topics with real sample tweets plus demand-signal posts. Does not call any LLM itself; the calling MCP client's own model writes the actual content from the returned data.
+- `XClient.searchRecentTweets` (`GET /2/tweets/search/recent`) and `XClient.getTrendsByWoeid` (`GET /2/trends/by/woeid/:id`, used only as an optional secondary signal for `be_trendy`).
+
 ### Changed
 
 - README, `.env.example`, and `server.json` now document v0.2.0 security behavior: loopback-only OAuth redirect, `0600` on all local data files, and media magic-byte validation.

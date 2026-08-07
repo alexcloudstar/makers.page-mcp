@@ -27,6 +27,16 @@ export type XUser = {
   name: string
 }
 
+export type XSearchTweet = XTweetWithMetrics & {
+  authorId?: string
+  authorUsername?: string
+}
+
+export type XTrend = {
+  name: string
+  tweetCount?: number
+}
+
 export type CreatedTweet = {
   id: string
   text: string
@@ -751,5 +761,51 @@ export class XClient {
     }
 
     return results
+  }
+
+  async searchRecentTweets(
+    query: string,
+    options: { maxResults?: number; nextToken?: string } = {},
+  ): Promise<{ tweets: XSearchTweet[]; nextToken?: string }> {
+    const maxResults = Math.min(Math.max(options.maxResults ?? 100, 10), 100)
+    const params = new URLSearchParams()
+    params.set("query", query)
+    params.set("max_results", String(maxResults))
+    params.set("tweet.fields", "created_at,text,public_metrics,author_id")
+    params.set("expansions", "author_id")
+    params.set("user.fields", "username")
+    if (options.nextToken) params.set("next_token", options.nextToken)
+
+    const result = await this.request<{
+      data?: Array<ApiTweetWithMetrics & { author_id?: string }>
+      includes?: { users?: Array<{ id: string; username: string }> }
+      meta?: { next_token?: string }
+    }>(`/2/tweets/search/recent?${params.toString()}`, { method: "GET" })
+
+    const usersById = new Map((result.includes?.users ?? []).map((user) => [user.id, user]))
+    const tweets = (result.data ?? [])
+      .map((tweet): XSearchTweet | undefined => {
+        const parsed = parseTweetWithMetrics(tweet)
+        if (!parsed) return undefined
+        return {
+          ...parsed,
+          authorId: tweet.author_id,
+          authorUsername: tweet.author_id ? usersById.get(tweet.author_id)?.username : undefined,
+        }
+      })
+      .filter((tweet): tweet is XSearchTweet => tweet !== undefined)
+
+    return { tweets, nextToken: result.meta?.next_token }
+  }
+
+  async getTrendsByWoeid(woeid: number, maxTrends = 20): Promise<XTrend[]> {
+    const capped = Math.min(Math.max(maxTrends, 1), 50)
+    const result = await this.request<{
+      data?: Array<{ trend_name: string; tweet_count?: number }>
+    }>(`/2/trends/by/woeid/${woeid}?max_trends=${capped}`, { method: "GET" })
+    return (result.data ?? []).map((trend) => ({
+      name: trend.trend_name,
+      tweetCount: trend.tweet_count,
+    }))
   }
 }
