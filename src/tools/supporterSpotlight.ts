@@ -53,11 +53,11 @@ export const registerSupporterSpotlightTools = (
         "Turn yesterday's engagement into today's relationships. Fetches every person who liked or replied to your X " +
         "posts from the previous calendar day (no cap — every post, every liker, every reply), dedupes them, and " +
         "excludes your own account. Only likes and replies count (reposts and quote tweets are ignored). Each " +
-        "supporter gets an engagement score (like = 1pt, reply = 3pts, +2 bonus for doing both) and the list is " +
-        "ranked highest-first. Always fetches live from X (nothing is cached or stored). generatedPost is a ready-to-" +
-        "post draft built from a fixed template (not AI-written) mentioning every supporter by @username, in ranked " +
-        "order — edit it freely, or leave it as-is. Nothing is ever auto-published; hand the finished text to " +
-        "create_draft if you want it to go out as a real post.",
+        "supporter gets an engagement score (like = 1pt, reply = 2pts — a reply carries more weight than a like on " +
+        "X — doing both = 3pts) and the list is ranked highest-first. Always fetches live from X (nothing is cached " +
+        "or stored). generatedPost is a ready-to-post draft built from a fixed template (not AI-written) mentioning " +
+        "every supporter by @username, in ranked order — edit it freely, or leave it as-is. Nothing is ever " +
+        "auto-published; hand the finished text to create_draft if you want it to go out as a real post.",
       inputSchema: {
         date: z
           .string()

@@ -116,21 +116,35 @@ describe("runSupporterSpotlight", () => {
     const result = await runSupporterSpotlight({ date: "2026-08-06" }, { supporterSource: source, getMe: async () => ME })
 
     expect(result.supporters.map((s) => s.username)).toEqual(["replier-only", "liker-only"])
-    expect(result.supporters[0]?.score).toBe(3)
+    expect(result.supporters[0]?.score).toBe(2)
     expect(result.supporters[1]?.score).toBe(1)
   })
 
-  test("awards a bonus for supporters who both liked and replied", async () => {
+  test("scores presence, not count — liking many posts doesn't multiply the score", async () => {
+    const source: SupporterSource = {
+      fetchRecentPosts: async () => [{ id: "p1" }, { id: "p2" }, { id: "p3" }],
+      fetchLikers: async () => [{ id: "1", username: "alice" }],
+      fetchReplyAuthors: async () => [],
+    }
+
+    const result = await runSupporterSpotlight({ date: "2026-08-06" }, { supporterSource: source, getMe: async () => ME })
+
+    expect(result.supporters[0]?.likeCount).toBe(3)
+    expect(result.supporters[0]?.score).toBe(1)
+  })
+
+  test("scores both like and reply as the sum of the two, ranked above either alone", async () => {
     const source = fakeSource({
       posts: [{ id: "p1" }],
-      likers: { p1: [{ id: "1", username: "both" }] },
-      repliers: { p1: [{ id: "1", username: "both" }] },
+      likers: { p1: [{ id: "1", username: "both" }, { id: "2", username: "liker-only" }] },
+      repliers: { p1: [{ id: "1", username: "both" }, { id: "3", username: "replier-only" }] },
     })
 
     const result = await runSupporterSpotlight({ date: "2026-08-06" }, { supporterSource: source, getMe: async () => ME })
 
-    // 1 (like) + 3 (reply) + 2 (bonus) = 6
-    expect(result.supporters[0]?.score).toBe(6)
+    // 1 (like) + 2 (reply) = 3
+    expect(result.supporters.map((s) => s.username)).toEqual(["both", "replier-only", "liker-only"])
+    expect(result.supporters[0]?.score).toBe(3)
   })
 
   test("builds a generatedPost mentioning every supporter in ranked order", async () => {

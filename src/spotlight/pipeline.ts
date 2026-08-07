@@ -7,11 +7,11 @@ import { NoPostsYesterdayError } from "./types.js"
 // from the target day is scanned, however many there are.
 const MAX_POSTS_TO_SCAN = 500
 
-const POINTS_PER_LIKE = 1
-const POINTS_PER_REPLY = 3
-// Rewards supporters who engaged in more than one way (liked AND replied), not just
-// volume in a single interaction type.
-const BONUS_FOR_BOTH_INTERACTION_TYPES = 2
+// Presence-based, not multiplied by count: liking 5 posts still only earns POINTS_FOR_LIKING
+// once. A reply weighs more than a like on X, so replying outranks liking; doing both
+// naturally sums to POINTS_FOR_LIKING + POINTS_FOR_REPLYING.
+const POINTS_FOR_LIKING = 1
+const POINTS_FOR_REPLYING = 2
 
 export type SupporterSpotlightInput = {
   date?: string
@@ -44,11 +44,14 @@ const addInteraction = (supporters: Map<string, Supporter>, user: SupporterUser,
 const scoreAndRank = (supporters: Supporter[]): Supporter[] => {
   for (const supporter of supporters) {
     supporter.score =
-      supporter.likeCount * POINTS_PER_LIKE +
-      supporter.replyCount * POINTS_PER_REPLY +
-      (supporter.likeCount > 0 && supporter.replyCount > 0 ? BONUS_FOR_BOTH_INTERACTION_TYPES : 0)
+      (supporter.likeCount > 0 ? POINTS_FOR_LIKING : 0) + (supporter.replyCount > 0 ? POINTS_FOR_REPLYING : 0)
   }
-  return supporters.sort((a, b) => b.score - a.score || a.username.localeCompare(b.username))
+  return supporters.sort(
+    (a, b) =>
+      b.score - a.score ||
+      b.likeCount + b.replyCount - (a.likeCount + a.replyCount) ||
+      a.username.localeCompare(b.username),
+  )
 }
 
 export const runSupporterSpotlight = async (
