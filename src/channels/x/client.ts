@@ -27,9 +27,15 @@ export type XUser = {
   name: string
 }
 
+export type ReferencedTweet = {
+  type: "replied_to" | "quoted" | "retweeted"
+  id: string
+}
+
 export type XSearchTweet = XTweetWithMetrics & {
   authorId?: string
   authorUsername?: string
+  referencedTweets?: ReferencedTweet[]
 }
 
 export type XTrend = {
@@ -775,13 +781,13 @@ export class XClient {
     const params = new URLSearchParams()
     params.set("query", query)
     params.set("max_results", String(maxResults))
-    params.set("tweet.fields", "created_at,text,public_metrics,author_id")
+    params.set("tweet.fields", "created_at,text,public_metrics,author_id,referenced_tweets")
     params.set("expansions", "author_id")
     params.set("user.fields", "username")
     if (options.nextToken) params.set("next_token", options.nextToken)
 
     const result = await this.request<{
-      data?: Array<ApiTweetWithMetrics & { author_id?: string }>
+      data?: Array<ApiTweetWithMetrics & { author_id?: string; referenced_tweets?: ReferencedTweet[] }>
       includes?: { users?: Array<{ id: string; username: string }> }
       meta?: { next_token?: string }
     }>(`/2/tweets/search/recent?${params.toString()}`, { method: "GET" })
@@ -795,6 +801,7 @@ export class XClient {
           ...parsed,
           authorId: tweet.author_id,
           authorUsername: tweet.author_id ? usersById.get(tweet.author_id)?.username : undefined,
+          referencedTweets: tweet.referenced_tweets,
         }
       })
       .filter((tweet): tweet is XSearchTweet => tweet !== undefined)
