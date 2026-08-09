@@ -30,6 +30,7 @@ export type XUser = {
 export type XSearchTweet = XTweetWithMetrics & {
   authorId?: string
   authorUsername?: string
+  authorName?: string
 }
 
 export type XTrend = {
@@ -773,12 +774,12 @@ export class XClient {
     params.set("max_results", String(maxResults))
     params.set("tweet.fields", "created_at,text,public_metrics,author_id")
     params.set("expansions", "author_id")
-    params.set("user.fields", "username")
+    params.set("user.fields", "username,name")
     if (options.nextToken) params.set("next_token", options.nextToken)
 
     const result = await this.request<{
       data?: Array<ApiTweetWithMetrics & { author_id?: string }>
-      includes?: { users?: Array<{ id: string; username: string }> }
+      includes?: { users?: Array<{ id: string; username: string; name: string }> }
       meta?: { next_token?: string }
     }>(`/2/tweets/search/recent?${params.toString()}`, { method: "GET" })
 
@@ -787,15 +788,56 @@ export class XClient {
       .map((tweet): XSearchTweet | undefined => {
         const parsed = parseTweetWithMetrics(tweet)
         if (!parsed) return undefined
+        const author = tweet.author_id ? usersById.get(tweet.author_id) : undefined
         return {
           ...parsed,
           authorId: tweet.author_id,
-          authorUsername: tweet.author_id ? usersById.get(tweet.author_id)?.username : undefined,
+          authorUsername: author?.username,
+          authorName: author?.name,
         }
       })
       .filter((tweet): tweet is XSearchTweet => tweet !== undefined)
 
     return { tweets, nextToken: result.meta?.next_token }
+  }
+
+  async listTopLevelUserPostsInRange(
+    userId: string,
+    startTime: string,
+    endTime: string,
+    maxPosts = 50,
+  ): Promise<XTweetWithMetrics[]> {
+    const collected: XTweetWithMetrics[] = []
+    let paginationToken: string | undefined
+
+    do {
+      const query = new URLSearchParams()
+      query.set("max_results", "100")
+      query.set("tweet.fields", "created_at,text,public_metrics,conversation_id")
+      query.set("exclude", "retweets")
+      query.set("start_time", startTime)
+      query.set("end_time", endTime)
+      if (paginationToken) query.set("pagination_token", paginationToken)
+
+      const result = await this.request<{
+        data?: Array<ApiTweetWithMetrics & { conversation_id?: string }>
+        meta?: { next_token?: string }
+      }>(`/2/users/${encodeURIComponent(userId)}/tweets?${query.toString()}`, { method: "GET" })
+
+      const page = result.data ?? []
+      // Only top-level posts you started: a reply/thread-continuation's conversation_id
+      // points at the root of the chain, which differs from its own id.
+      for (const tweet of page) {
+        if (tweet.conversation_id !== tweet.id) continue
+        const parsed = parseTweetWithMetrics(tweet)
+        if (parsed) collected.push(parsed)
+      }
+
+      paginationToken = result.meta?.next_token
+      if (page.length === 0) break
+    } while (paginationToken && collected.length < maxPosts)
+
+    return collected.slice(0, maxPosts)
   }
 
   async getTrendsByWoeid(woeid: number, maxTrends = 20): Promise<XTrend[]> {

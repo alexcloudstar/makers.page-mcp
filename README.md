@@ -217,6 +217,7 @@ All of these read the same `mcpServers`-style JSON (Gemini CLI and JetBrains use
 | `get_x_post_metrics` | Fetch impressions, likes, reposts, replies, quotes, and bookmarks for up to 100 post ids. |
 | `get_x_account_summary` | Calendar-day impressions and engagements via `GET /2/tweets/analytics` (aligned with x.com account analytics). Period totals and top posts for the window. |
 | `analyze_x_posting_times` | Hour-of-day analysis: avg impressions and engagement rate by when you posted. |
+| `get_top_engagers` | Rank who commented the most on your top-level X posts for a given calendar day (default yesterday, timezone-aware). Finds the top-level posts you started that day via `GET /2/users/:id/tweets`, then for each one pulls every reply in that post's conversation via `GET /2/tweets/search/recent` (sweeps in replies anywhere in a thread, not just the root), excluding yourself. Ranks commenters by comment count, then likes on their comments. Read-only; no drafts. Same 7-day Recent Search limit as `be_trendy` applies to older dates. |
 | `be_trendy` | Discover what's trending right now on X within a specific product niche, via X Recent Search scoped to the niche/keywords, not X's generic global trending list. Required: `productName`, `productDescription`, `niche`, `targetAudience`. Optional: `keywords`, `language`. Filters spam and near-duplicates, then returns scored `trendingTopics` (with sample tweets and engagement numbers), `painPointSignals` (demand-signal posts asking for recommendations/alternatives), and a post-timing `recommendation`. Does not generate content itself, use the returned data plus the product's context to write the actual post. |
 | `create_retweet_draft` | Save a draft retweet or undo-retweet for a post id. Not executed until approved. |
 | `list_retweet_drafts` | List retweet/undo drafts, optionally filtered by status. |
@@ -258,6 +259,7 @@ Typical trend-discovery flow: `be_trendy` → agent writes a post from the retur
 - **Replies:** Self-serve apps can create **self-threads** (reply to your own previous part). Replies to *other* accounts are blocked unless summoned.
 - **Cashtags:** Self-serve allows **at most one cashtag** (`$TICKER`) per post.
 - **`be_trendy` requires a paid API tier:** it calls X's Recent Search endpoint, which needs at least a **Basic** paid X API access tier. A Free-tier app will get 403/429 errors.
+- **`get_top_engagers` also uses Recent Search**, so it needs the same paid tier, and only ever sees comments from the last **7 days** regardless of how old the post being checked is.
 
 ## If a publish attempt fails ambiguously
 
