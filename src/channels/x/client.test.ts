@@ -322,3 +322,52 @@ describe("XClient retweets", () => {
     expect(capturedUrl).toContain("/2/users/me-1/retweets/555")
   })
 })
+
+describe("XClient.listTopLevelUserPostsInRange", () => {
+  test("keeps only posts whose conversation_id equals their own id, filtering out replies", async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            { id: "1", conversation_id: "1", text: "root post", created_at: "2026-08-07T10:00:00Z" },
+            { id: "2", conversation_id: "1", text: "self-thread reply", created_at: "2026-08-07T10:01:00Z" },
+            { id: "3", conversation_id: "99", text: "reply to someone else", created_at: "2026-08-07T10:02:00Z" },
+          ],
+        }),
+        { status: 200 },
+      )) as unknown as typeof fetch
+
+    const client = withMockedAuth(new XClient(config))
+    const posts = await client.listTopLevelUserPostsInRange("me-1", "2026-08-07T00:00:00Z", "2026-08-08T00:00:00Z")
+
+    expect(posts.map((post) => post.id)).toEqual(["1"])
+  })
+
+  test("paginates until next_token is absent or maxPosts is reached", async () => {
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls += 1
+      if (calls === 1) {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: "1", conversation_id: "1", text: "a", created_at: "2026-08-07T10:00:00Z" }],
+            meta: { next_token: "page2" },
+          }),
+          { status: 200 },
+        )
+      }
+      return new Response(
+        JSON.stringify({
+          data: [{ id: "2", conversation_id: "2", text: "b", created_at: "2026-08-07T11:00:00Z" }],
+        }),
+        { status: 200 },
+      )
+    }) as unknown as typeof fetch
+
+    const client = withMockedAuth(new XClient(config))
+    const posts = await client.listTopLevelUserPostsInRange("me-1", "2026-08-07T00:00:00Z", "2026-08-08T00:00:00Z")
+
+    expect(calls).toBe(2)
+    expect(posts.map((post) => post.id)).toEqual(["1", "2"])
+  })
+})

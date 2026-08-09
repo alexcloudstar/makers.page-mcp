@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `get_top_engagers`: ranks who commented the most on your top-level X posts for a given calendar day (default yesterday, timezone-aware), so you know who to follow up with. Finds top-level posts via `GET /2/users/:id/tweets`, then pulls every reply per post's conversation via X Recent Search, excluding yourself. Read-only, no drafts.
+- `XClient.listTopLevelUserPostsInRange` (`GET /2/users/:id/tweets`, filtered to posts where `conversation_id` equals the post's own id — i.e. posts you started, not replies or thread continuations).
+- `XClient.searchRecentTweets` now also resolves each author's display name (`user.fields=name`), not just their username.
+
 ## [0.3.1] - 2026-08-09
 
 ### Fixed
