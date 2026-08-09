@@ -51,8 +51,8 @@ export const registerTrendTools = (server: McpServer, config: Config, deps: Tren
         "filters out spam and near-duplicates, and returns algorithmically scored trending topics with real sample tweets and engagement " +
         "numbers, real demand-signal posts (people asking for recommendations/alternatives), and a post-timing recommendation. " +
         "This tool does not generate content itself: after calling it, use the returned trendingTopics and painPointSignals, plus the " +
-        "product's name/description/audience from this conversation, to write natural, platform-appropriate content (tweet, thread, " +
-        "LinkedIn post, Bluesky post, Reddit title, Hacker News title) that connects the product to the trend. Avoid AI-sounding phrasing, " +
+        "product's name/description/audience from this conversation, to write natural, X-appropriate content (a tweet or thread) that " +
+        "connects the product to the trend — this server can only draft and publish to X today. Avoid AI-sounding phrasing, " +
         "do not fabricate engagement numbers, and ground any claims in the sample tweets returned.",
       inputSchema: {
         productName: z.string().min(1).max(200).meta({ description: "Name of the product to find trending angles for." }),
