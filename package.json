@@ -1,6 +1,6 @@
 {
   "name": "makers-page-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "mcpName": "io.github.alexcloudstar/makers-page-mcp",
   "description": "Makers Page MCP: approval-gated X (Twitter) posting, DMs, retweets, and trend discovery for your coding agent. More of the indie stack (payments, GitHub, DBs) is on the roadmap.",
   "keywords": [
