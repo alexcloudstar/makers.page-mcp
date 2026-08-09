@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-09
+
 ### Added
 
 - `get_top_engagers`: ranks who commented the most on your top-level X posts for a given calendar day (default yesterday, timezone-aware), so you know who to follow up with. Finds top-level posts via `GET /2/users/:id/tweets`, then pulls every reply per post's conversation via X Recent Search, excluding yourself. Read-only, no drafts.
@@ -101,7 +103,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - OAuth 2.0 (PKCE) authorization flow for connecting an X account.
 - Local, file-based draft storage with an approval gate before publishing.
 
-[Unreleased]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/alexcloudstar/makers.page-mcp/compare/v0.1.1...v0.1.2
