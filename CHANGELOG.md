@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-09
+
+### Fixed
+
+- `be_trendy`'s tool description no longer implies it can write LinkedIn, Bluesky, Reddit, or Hacker News content, this server only ever drafts/publishes to X.
+- `package.json`/`server.json` descriptions now lead with what's actually shipped (X posting, DMs, retweets, trend discovery) instead of the full roadmap (payments, GitHub, DBs).
+- Removed the misleading `stripe` keyword (no Stripe integration exists) and added keywords for real, previously-undiscoverable features: `oauth`, `twitter-api`, `draft`, `approval-workflow`, `direct-messages`.
+
 ## [0.3.0] - 2026-08-07
 
 ### Added
